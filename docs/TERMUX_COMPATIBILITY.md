@@ -10,6 +10,7 @@
 | Mô phỏng trên Linux | Đã có test cho detection, fallback RAM, lock, timeout, SQLite |
 | Kết luận | **Sẵn sàng cho checklist kiểm thử thiết bị**, không tuyên bố đã chạy thật |
 | Thiết bị trong phiên P0 | `adb devices` không có thiết bị attached | **BLOCKED** |
+| Thiết bị trong phiên audit | Xiaomi `25057RN09G`, Android 16, Termux 0.118.3 đã cài; màn hình khóa, ADB shell không có `RUN_COMMAND`, app không debuggable, không root | **BLOCKED (không chạy được)** |
 
 Không được coi `config/termux.yaml` tồn tại là bằng chứng Termux hoạt động.
 
@@ -146,3 +147,54 @@ Ghi lại:
 4. Không tắt kiểm tra lock hoặc thêm fallback chạy không khóa.
 
 Nếu vẫn fail, ghi lại filesystem/kernel và mở issue; không dùng `--force` hoặc bỏ lock.
+
+
+## 7. One-command self-test
+
+Trên Termux, chạy:
+
+```bash
+cd ~/trinity-v3
+python3 -m pip install -r requirements.txt
+python3 scripts/termux_self_test.py --quick
+```
+
+Hoặc chạy đầy đủ (bao gồm unittest):
+
+```bash
+python3 scripts/termux_self_test.py
+```
+
+Hoặc:
+
+```bash
+make termux-self-test
+```
+
+Script kiểm tra:
+
+- Python >= 3.9, profile Termux;
+- RAM/disk và Resource Guard;
+- SQLite + lease/heartbeat + recovery;
+- `fcntl` lock và mutual exclusion;
+- subprocess timeout/process-group kill;
+- CLI Trinity;
+- discovery Hermes/OpenCode/OpenClaw (không chạy prompt);
+- tùy chọn chạy toàn bộ unittest.
+
+Báo cáo được ghi vào `logs/termux-self-test-<timestamp>.txt`. Script không chạy agent, không đọc secret, không sửa ngoài workspace/temp.
+
+### Kết quả ADB hiện tại
+
+```text
+adb devices           -> ed2ec4c device
+model                 -> 25057RN09G (Xiaomi)
+Android               -> 16
+Termux                -> com.termux 0.118.3
+run-as com.termux     -> package not debuggable
+su                    -> not found
+RUN_COMMAND service   -> Requires com.termux.permission.RUN_COMMAND
+lockscreen            -> mDreamingLockscreen=true
+```
+
+Vì vậy **chưa thể chạy self-test trên thiết bị** trong phiên này. Không cài/grant quyền tự động; cần người dùng mở khóa và chạy lệnh trên Termux.

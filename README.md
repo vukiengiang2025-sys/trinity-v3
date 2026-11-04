@@ -20,8 +20,8 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 > - **Đã chạy read-only prompt thật** qua OpenCode với agent tạm `trinity-readonly` trong workspace giả: task `TRN-20261104-152925-1c79c9` COMPLETED, workspace/Git không đổi, `/etc/passwd` bị `external_directory` deny.
 > - Chưa xác minh agent production (`build`/`general`); mặc định vẫn fail closed nếu chưa cấu hình `agent`.
 > - HTTP API của OpenCode chỉ được health-check; endpoint thực thi có auth **chưa xác minh**, nên mặc định tắt.
-> - Local Python 3.9.25 và 3.12: **167 test PASS**; CI GitHub Actions đang queued.
-> - **167 unittest — 0 failure**.
+> - Local Python 3.9.25 và 3.12: **168 test PASS**; CI GitHub Actions đang queued.
+> - **168 unittest — 0 failure**.
 >
 > Trinity không tuyên bố tích hợp đầy đủ ba agent khi adapter tương ứng chưa được xác minh.
 
@@ -122,7 +122,14 @@ python3 -m pip install -r requirements.txt
 export TRINITY_PROFILE=termux
 python3 trinity.py doctor
 python3 trinity.py status
+
+# Self-test một lệnh (không chạy agent, không đọc secret)
+python3 scripts/termux_self_test.py --quick
+# hoặc chạy đầy đủ gồm unittest
+python3 scripts/termux_self_test.py
 ```
+
+Báo cáo được ghi vào `logs/termux-self-test-<timestamp>.txt`.
 
 Nếu làm việc với thư mục dùng chung:
 
@@ -400,7 +407,7 @@ Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên tr
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Kết quả lần chạy gần nhất: **167 test, 0 failure, 0 error** trên Python 3.9.25 và 3.12. CI v3.1 (153 test) đã pass; run 167 đang queued. Xem `docs/TEST_REPORT.md`.
+Kết quả lần chạy gần nhất: **168 test, 0 failure, 0 error** trên Python 3.9.25 và 3.12. CI v3.1 (153 test) đã pass; run 168 đang queued. Xem `docs/TEST_REPORT.md`.
 
 Các nhóm đã kiểm tra:
 
@@ -418,6 +425,7 @@ Các nhóm đã kiểm tra:
 - Baseline: hash, deny→allow mutation detection, approval metadata.
 - Router negation: “không chạy shell” không tạo bước AUTOMATION.
 - Termux simulation: PREFIX detection, profile thresholds, sysconf fallback, fcntl unsupported → fail closed, non-POSIX fail closed.
+- **Termux self-test**: SQLite/lease/recovery, fcntl lock, timeout/process group, CLI, adapter discovery; không chạy agent.
 
 ---
 
@@ -444,6 +452,8 @@ trinity-v3/
 ├── storage/
 │   └── memory.py        # SQLite TaskManager + AuditLog
 ├── logs/                # runtime, gitignored
+├── scripts/
+│   └── termux_self_test.py
 ├── tests/
 ├── docs/                # kiến trúc, bảo mật, test, Termux
 ├── README.md
