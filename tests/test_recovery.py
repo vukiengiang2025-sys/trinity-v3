@@ -3,13 +3,14 @@ from __future__ import annotations
 import os
 import sqlite3
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
 
 from tests.support import FakeAdapter, FakeResource, make_config
 
-from core.executor import Executor
+from core.executor import Executor, TaskHeartbeat
 from storage.memory import AuditLog, TaskManager
 
 
@@ -91,6 +92,26 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.executor().recover_interrupted_tasks(), 1)
         self.assertEqual(self.manager.get_task("TRN-fresh")["status"], "FAILED")
 
+    def test_heartbeat_thread_refreshes_lease(self):
+        self.manager.create_task(
+            task_id="TRN-heartbeat-thread",
+            task_type="CODING",
+            prompt="thread",
+            adapter="opencode",
+            risk_level="medium",
+            profile="linux",
+        )
+        self.manager.mark_running("TRN-heartbeat-thread", "runner-a", os.getpid(), "host-a")
+        before = self.manager.get_task("TRN-heartbeat-thread")["heartbeat_at"]
+        heartbeat = TaskHeartbeat(self.manager, "TRN-heartbeat-thread", "runner-a", interval=1)
+        heartbeat.start()
+        try:
+            time.sleep(1.4)
+        finally:
+            heartbeat.stop()
+        after = self.manager.get_task("TRN-heartbeat-thread")["heartbeat_at"]
+        self.assertGreater(after, before)
+
     def test_atomic_recovery_rejects_fresh_lease(self):
         self.manager.create_task(
             task_id="TRN-atomic",
@@ -109,6 +130,29 @@ class RecoveryTests(unittest.TestCase):
             self.manager.recover_running_task("TRN-atomic", "forced stale", time.time() + 1)
         )
         self.assertEqual(self.manager.get_task("TRN-atomic")["status"], "FAILED")
+
+    def test_heartbeat_from_thread_updates_lease(self):
+        self.manager.create_task(
+            task_id="TRN-thread-heartbeat",
+            task_type="CODING",
+            prompt="thread heartbeat",
+            adapter="opencode",
+            risk_level="medium",
+            profile="linux",
+        )
+        self.manager.mark_running("TRN-thread-heartbeat", "runner-a", os.getpid(), "host-a")
+        before = self.manager.get_task("TRN-thread-heartbeat")["heartbeat_at"]
+        results = []
+
+        def beat():
+            results.append(self.manager.heartbeat("TRN-thread-heartbeat", "runner-a"))
+
+        thread = threading.Thread(target=beat)
+        thread.start()
+        thread.join(timeout=5)
+        self.assertEqual(results, [True])
+        after = self.manager.get_task("TRN-thread-heartbeat")["heartbeat_at"]
+        self.assertGreater(after, before)
 
     def test_mark_running_and_heartbeat_lease(self):
         self.manager.create_task(

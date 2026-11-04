@@ -326,9 +326,19 @@ class TaskManager:
         return task
 
     def heartbeat(self, task_id: str, runner_id: str) -> bool:
-        """Refresh the lease only if this runner still owns a RUNNING task."""
+        """Refresh the lease only if this runner still owns a RUNNING task.
 
-        conn = self._connect(create=False)
+        Heartbeat runs in a separate thread.  A dedicated SQLite connection
+        avoids sharing the main thread's connection across threads.
+        """
+
+        is_memory = self.db_path == ":memory:"
+        if not is_memory and not Path(self.db_path).exists():
+            return False
+        try:
+            conn = self._conn if is_memory else sqlite3.connect(self.db_path, timeout=5.0)
+        except sqlite3.Error:
+            return False
         if conn is None:
             return False
         try:
@@ -340,6 +350,9 @@ class TaskManager:
             return cursor.rowcount == 1
         except sqlite3.Error:
             return False
+        finally:
+            if not is_memory:
+                conn.close()
 
     def add_event(self, task_id: str, kind: str, message: str) -> None:
         conn = self._connect(create=False)

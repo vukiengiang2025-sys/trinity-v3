@@ -293,6 +293,19 @@ def load_config(
     if not isinstance(data.get("workspace", {}).get("allowed_roots"), list):
         raise ConfigError("workspace.allowed_roots phải là danh sách")
 
+    try:
+        heartbeat = float(data.get("resources", {}).get("heartbeat_interval_seconds", 5))
+        stale = float(data.get("resources", {}).get("recovery_stale_seconds", 60))
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("heartbeat_interval_seconds/recovery_stale_seconds phải là số") from exc
+    if heartbeat <= 0 or stale <= 0:
+        raise ConfigError("heartbeat_interval_seconds và recovery_stale_seconds phải > 0")
+    if heartbeat >= stale:
+        raise ConfigError(
+            "heartbeat_interval_seconds phải nhỏ hơn recovery_stale_seconds "
+            "để không tự đánh dấu task đang chạy là stale"
+        )
+
     config = AppConfig(profile=selected, data=data, source_path=path, project_root=root, warnings=warnings)
 
     # Validate resolved paths early so commands fail with a clear message.

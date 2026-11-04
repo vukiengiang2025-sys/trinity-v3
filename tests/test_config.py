@@ -73,6 +73,19 @@ class ConfigTests(unittest.TestCase):
         self.assertNotIn(fake_key, text)
         self.assertNotIn(fake_token, text)
 
+    def test_heartbeat_must_be_shorter_than_recovery_lease(self):
+        cfgdir = self.root / "bad-config"
+        cfgdir.mkdir()
+        (cfgdir / "linux.yaml").write_text(
+            "profile: linux\n"
+            "resources:\n"
+            "  heartbeat_interval_seconds: 60\n"
+            "  recovery_stale_seconds: 60\n",
+            encoding="utf-8",
+        )
+        with self.assertRaises(ConfigError):
+            load_config("linux", config_dir=cfgdir, project_root=self.root)
+
     def test_redaction_helpers(self):
         fake_token = "ghp_" + ("z" * 36)
         text = f"password=hunter2 token={fake_token}"

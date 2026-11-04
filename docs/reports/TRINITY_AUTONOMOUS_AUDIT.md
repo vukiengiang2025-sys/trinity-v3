@@ -27,8 +27,8 @@
 
 - Các run `41862431433`, `41862765458`, `41863534439`, `41863841326` vẫn **queued**, không có kết quả.
 - GitHub Actions API báo Actions operational; không có runner được cấp.
-- Không sửa code để “làm CI xanh”; không tuyên bố PASS cho 171 test trên CI.
-- Đã xác minh local bằng Python 3.9.25 (`uv`) và Python 3.12: **171 test PASS**.
+- Không sửa code để “làm CI xanh”; không tuyên bố PASS cho 174 test trên CI.
+- Đã xác minh local bằng Python 3.9.25 (`uv`) và Python 3.12: **174 test PASS**.
 
 ### 2.2 Termux
 
@@ -100,13 +100,13 @@ Residual:
 
 | Hạng mục | Kết quả |
 |---|---|
-| Full suite local Python 3.12 | **171 PASS** |
-| Full suite local Python 3.9.25 | **171 PASS** |
+| Full suite local Python 3.12 | **174 PASS** |
+| Full suite local Python 3.9.25 | **174 PASS** |
 | Failure/Error | 0 / 0 |
 | `termux_self_test.py --quick` trên Linux | **9/9 PASS** |
 | Security/recovery/baseline tests | PASS |
 | CI 153 test trước đó | PASS |
-| CI 171 test | **QUEUED** — chưa xác nhận |
+| CI 174 test | **QUEUED** — chưa xác nhận |
 
 ## 4. File thay đổi trong audit này
 
@@ -154,5 +154,5 @@ Gửi lại `logs/termux-self-test-*.txt` để đối chiếu.
 - OpenCode read-only: **LIVE VERIFIED**.
 - Termux: **BLOCKED** do thiết bị khóa/không có quyền chạy; self-test đã sẵn sàng.
 - Hermes/OpenClaw: **UNAVAILABLE**.
-- CI 171: **QUEUED**, không tuyên bố PASS.
+- CI 174: **QUEUED**, không tuyên bố PASS.
 - Chưa bật `build/general`; chưa cho Trinity tự sửa repository.
