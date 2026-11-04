@@ -53,7 +53,7 @@ def make_config(
 def make_fake_executable(tmp_path: Path, name: str = "fake-tool", mode: str = "ok") -> Path:
     path = Path(tmp_path) / name
     body = f'''#!/usr/bin/env python3
-import sys, time
+import sys, time, signal, os
 args = sys.argv[1:]
 mode = {mode!r}
 if "--version" in args:
@@ -74,6 +74,8 @@ if mode == "timeout":
 if mode == "permission":
     print("permission required: approval needed before tool use", file=sys.stderr)
     sys.exit(2)
+if mode == "kill":
+    os.kill(os.getpid(), signal.SIGKILL)
 if mode == "fail":
     print("intentional failure", file=sys.stderr)
     sys.exit(2)

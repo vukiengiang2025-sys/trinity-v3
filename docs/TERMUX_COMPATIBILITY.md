@@ -9,6 +9,7 @@
 | Chạy trên Termux thật | **CHƯA XÁC MINH** |
 | Mô phỏng trên Linux | Đã có test cho detection, fallback RAM, lock, timeout, SQLite |
 | Kết luận | **Sẵn sàng cho checklist kiểm thử thiết bị**, không tuyên bố đã chạy thật |
+| Thiết bị trong phiên P0 | `adb devices` không có thiết bị attached | **BLOCKED** |
 
 Không được coi `config/termux.yaml` tồn tại là bằng chứng Termux hoạt động.
 

@@ -96,6 +96,15 @@ class OpenCodeAdapterTests(AdapterTestBase):
         result = adapter.execute(self.request())
         self.assertEqual(result.status, ResultStatus.UNVERIFIED)
 
+    def test_killed_process_is_failed(self):
+        fake = make_fake_executable(self.root, "opencode-killed", mode="kill")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        result = adapter.execute(self.request())
+        self.assertEqual(result.status, ResultStatus.FAILED)
+        self.assertLess(result.exit_code or 0, 0)
+
     def test_nonzero_exit_is_failed(self):
         fake = make_fake_executable(self.root, "opencode-fail", mode="fail")
         self.config.data["adapters"]["opencode"]["binary"] = str(fake)

@@ -3,10 +3,10 @@
 - **Ngày:** 2026-11-04
 - **Môi trường:** Linux Mint 22.3, Python 3.12.3, OpenCode v2.2.5
 - **Lệnh:** `python3 -m unittest discover -s tests -t . -v`
-- **Kết quả:** **164 test — 0 failure — 0 error — OK**
+- **Kết quả:** **165 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
-- **Sau v3.1:** 164 test (+49)
-- **CI:** v3.1 (153 test) PASS; bộ 164 test chờ push
+- **Sau v3.1:** 165 test (+50)
+- **CI:** v3.1 (153 test) PASS; bộ 165 test chờ push
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -18,14 +18,14 @@
 | `test_guard.py` | 20 | Path, symlink, file nhạy cảm, command allowlist, Git safety, injection |
 | `test_resource.py` | 11 | RAM đọc được/không đọc được, sysconf fallback, RAM/disk thấp, lock, timeout |
 | `test_task.py` | 12 | Task lifecycle, transition, event, permission, missing DB, redaction, audit |
-| `test_adapters.py` | 26 | Missing tool, fake CLI, timeout, JSON empty/invalid/error event, permission, OpenClaw/Hermes, default-agent deny, standalone |
+| `test_adapters.py` | 27 | Missing tool, fake CLI, timeout, JSON empty/invalid/error event, permission, OpenClaw/Hermes, default-agent deny, standalone |
 | `test_opencode_baseline.py` | 9 | Frozen config hash, deny rules, durability records, failure modes, no secrets |
 | `test_executor.py` | 13 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
 | `test_resume.py` | 16 | Resume cùng Task ID, approval record, atomic claim, mismatch, migration, lock fail-closed |
 | `test_cli.py` | 18 | version/status/config/tasks/task/run/resume, dry-run, exit code |
 | `test_utils.py` | 11 | Redaction, truncate, mask mapping, subprocess timeout, PWD/cwd consistency |
 | `test_recovery.py` | 6 | Orphan RUNNING → FAILED, lock busy, idempotent, dry-run, CLI recovery |
-| **Tổng** | **164** | |
+| **Tổng** | **165** | |
 
 ## 2. CI
 
@@ -154,7 +154,7 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 - Non-POSIX → fail closed.
 - Subprocess timeout + kill process group.
 
-**Chưa chạy trên Redmi 15 5G / Termux thật.** Checklist: `docs/TERMUX_COMPATIBILITY.md`.
+**Chưa chạy trên Redmi 15 5G / Termux thật**: `adb devices` không có thiết bị attached trong phiên P0. Checklist: `docs/TERMUX_COMPATIBILITY.md`.
 
 ## 6. Smoke test thủ công
 
@@ -194,7 +194,7 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
-7. **CI 164 test**: chờ chạy sau push; CI 153 test trước đó PASS.
+7. **CI 165 test**: chờ chạy sau push; CI 153 test trước đó PASS.
 
 ## 9. Cách tái lập
 
