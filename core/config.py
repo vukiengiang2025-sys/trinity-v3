@@ -47,6 +47,8 @@ DEFAULTS: Dict[str, Any] = {
         "max_timeout_seconds": 3600,
         "lock_path": "logs/.trinity.lock",
         "on_low_memory": "deny",
+        "recovery_stale_seconds": 60,
+        "heartbeat_interval_seconds": 5,
     },
     "guard": {
         "allowed_commands": [

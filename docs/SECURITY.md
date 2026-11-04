@@ -89,7 +89,7 @@ Chặn vĩnh viễn:
 - Ngưỡng riêng Linux/Termux.
 - Một lock `fcntl` duy nhất; không chạy đồng thời.
 - **Fail closed**: nếu `fcntl` thiếu, không phải POSIX, hoặc filesystem không hỗ trợ flock (shared storage Android), Trinity từ chối chạy. Không fallback sang chạy không khóa.
-- Khi khởi động lại, task `RUNNING` bị bỏ lại chỉ được đánh dấu `FAILED` nếu lock có thể acquire; lock đang bận thì không đụng task. Không đánh dấu `COMPLETED` khi chưa có kết quả adapter.
+- Khi khởi động lại, task `RUNNING` chỉ bị đánh dấu `FAILED` nếu lock acquire được **và** heartbeat cũ hơn `recovery_stale_seconds`. Heartbeat còn mới hoặc lock đang bận → không đụng task, kể cả lock file bị mất. Runner lease gồm `runner_id`, PID, host, heartbeat. Không đánh dấu `COMPLETED` khi chưa có kết quả adapter.
 - `PR_SET_PDEATHSIG` best-effort kill direct child khi Trinity chết; không bảo vệ được detached grandchildren.
 - Timeout bị clamp theo profile; process tree bị kill khi quá hạn.
 - Output giới hạn để tránh flood bộ nhớ/DB.

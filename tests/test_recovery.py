@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,6 +67,45 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.manager.get_task(task_id)["status"], "RUNNING")
         self.assertEqual(self.executor().recover_interrupted_tasks(), 1)
         self.assertEqual(self.manager.get_task(task_id)["status"], "FAILED")
+
+    def test_fresh_heartbeat_is_not_recovered(self):
+        self.manager.create_task(
+            task_id="TRN-fresh",
+            task_type="CODING",
+            prompt="live",
+            adapter="opencode",
+            risk_level="medium",
+            profile="linux",
+        )
+        self.manager.mark_running("TRN-fresh", "runner-a", os.getpid(), "host-a")
+        self.assertEqual(self.executor().recover_interrupted_tasks(), 0)
+        self.assertEqual(self.manager.get_task("TRN-fresh")["status"], "RUNNING")
+
+        conn = sqlite3.connect(self.config.db_path)
+        try:
+            conn.execute("UPDATE tasks SET heartbeat_at = 0 WHERE id = ?", ("TRN-fresh",))
+            conn.commit()
+        finally:
+            conn.close()
+        self.assertEqual(self.executor().recover_interrupted_tasks(), 1)
+        self.assertEqual(self.manager.get_task("TRN-fresh")["status"], "FAILED")
+
+    def test_mark_running_and_heartbeat_lease(self):
+        self.manager.create_task(
+            task_id="TRN-lease",
+            task_type="CODING",
+            prompt="lease",
+            adapter="opencode",
+            risk_level="medium",
+            profile="linux",
+        )
+        task = self.manager.mark_running("TRN-lease", "runner-a", os.getpid(), "host-a")
+        self.assertEqual(task["runner_id"], "runner-a")
+        self.assertEqual(task["runner_pid"], os.getpid())
+        self.assertTrue(self.manager.heartbeat("TRN-lease", "runner-a"))
+        self.assertFalse(self.manager.heartbeat("TRN-lease", "runner-b"))
+        with self.assertRaises(Exception):
+            self.manager.mark_running("TRN-lease", "runner-b", os.getpid(), "host-b")
 
     def test_recovery_does_not_touch_waiting_approval(self):
         self.manager.create_task(

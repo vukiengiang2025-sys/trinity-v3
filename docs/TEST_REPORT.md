@@ -3,10 +3,10 @@
 - **Ngày:** 2026-11-04
 - **Môi trường:** Linux Mint 22.3, Python 3.12.3, OpenCode v2.2.5
 - **Lệnh:** `python3 -m unittest discover -s tests -t . -v`
-- **Kết quả:** **165 test — 0 failure — 0 error — OK**
+- **Kết quả:** **167 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
-- **Sau v3.1:** 165 test (+50)
-- **CI:** v3.1 (153 test) PASS; bộ 165 test chờ push
+- **Sau v3.1:** 167 test (+52)
+- **CI:** v3.1 (153 test) PASS; bộ 167 test chờ push
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -24,8 +24,8 @@
 | `test_resume.py` | 16 | Resume cùng Task ID, approval record, atomic claim, mismatch, migration, lock fail-closed |
 | `test_cli.py` | 18 | version/status/config/tasks/task/run/resume, dry-run, exit code |
 | `test_utils.py` | 11 | Redaction, truncate, mask mapping, subprocess timeout, PWD/cwd consistency |
-| `test_recovery.py` | 6 | Orphan RUNNING → FAILED, lock busy, idempotent, dry-run, CLI recovery |
-| **Tổng** | **165** | |
+| `test_recovery.py` | 8 | Orphan RUNNING → FAILED, lock busy, idempotent, dry-run, CLI recovery |
+| **Tổng** | **167** | |
 
 ## 2. CI
 
@@ -136,7 +136,9 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 
 ### 4.1 Crash recovery
 
-- Task `RUNNING` bị bỏ lại sau khi Trinity dừng được đánh dấu `FAILED` khi khởi động lại, **chỉ khi lock có thể acquire**.
+- Task `RUNNING` bị bỏ lại chỉ bị đánh dấu `FAILED` khi lock acquire được **và** heartbeat cũ hơn 60s (hoặc chưa có heartbeat).
+- Heartbeat mới hoặc lock đang bận → không đụng task, kể cả lock file bị mất.
+- Runner lease gồm `runner_id`, PID, host, heartbeat; heartbeat thread cập nhật mỗi 5s.
 - Không đánh dấu `COMPLETED` nếu chưa có kết quả adapter xác nhận.
 - Recovery idempotent; lock đang bận thì không đụng task.
 - Test CLI: task orphan `RUNNING` → CLI `run` recovery → `FAILED`, sau đó task mới `WAITING_APPROVAL`.
@@ -194,7 +196,7 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
-7. **CI 165 test**: chờ chạy sau push; CI 153 test trước đó PASS.
+7. **CI 167 test**: chờ chạy sau push; CI 153 test trước đó PASS.
 
 ## 9. Cách tái lập
 

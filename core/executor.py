@@ -11,6 +11,10 @@ import getpass
 import hashlib
 import json
 import os
+import socket
+import threading
+import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -70,6 +74,35 @@ class ExecutionOutcome:
         }
 
 
+class TaskHeartbeat:
+    """Keep a task lease fresh while an adapter is running."""
+
+    def __init__(self, task_manager: TaskManager, task_id: str, runner_id: str, interval: float = 5.0):
+        self.task_manager = task_manager
+        self.task_id = task_id
+        self.runner_id = runner_id
+        self.interval = max(1.0, float(interval))
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name=f"trinity-heartbeat-{task_id}", daemon=True)
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.interval):
+            try:
+                self.task_manager.heartbeat(self.task_id, self.runner_id)
+            except Exception:
+                # A missing heartbeat will cause recovery to treat the task as
+                # stale, which is safer than claiming it completed.
+                return
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=self.interval + 1)
+
+
 class Executor:
     def __init__(
         self,
@@ -89,6 +122,8 @@ class Executor:
             config.db_path, max_result_chars=int(config.get("storage.max_result_chars", 20000))
         )
         self.audit = audit or AuditLog(config.log_dir)
+        self.runner_host = socket.gethostname()
+        self.runner_id = f"{self.runner_host}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
         self.adapters = adapters or {
             "hermes": HermesAdapter(config, self.guard),
             "opencode": OpenCodeAdapter(config, self.guard),
@@ -172,9 +207,23 @@ class Executor:
             )
 
         steps: List[StepReport] = []
+        heartbeat: Optional[TaskHeartbeat] = None
         try:
-            task = self.task_manager.update_status(route.task_id, RUNNING)
-            self._audit("task_started", route.task_id, {"task_type": route.task_type, "plan": route.execution_plan})
+            task = self.task_manager.mark_running(
+                route.task_id, self.runner_id, os.getpid(), self.runner_host
+            )
+            self._audit(
+                "task_started",
+                route.task_id,
+                {"task_type": route.task_type, "plan": route.execution_plan, "runner_id": self.runner_id},
+            )
+            heartbeat = TaskHeartbeat(
+                self.task_manager,
+                route.task_id,
+                self.runner_id,
+                interval=float(self.config.get("resources.heartbeat_interval_seconds", 5)),
+            )
+            heartbeat.start()
             task = self._run_plan(route, prompt, steps, timeout, approve)
             if task["status"] == COMPLETED:
                 self._audit("task_completed", route.task_id, {"steps": len(steps)})
@@ -205,6 +254,8 @@ class Executor:
                 steps=steps,
             )
         finally:
+            if heartbeat is not None:
+                heartbeat.stop()
             if lock is not None:
                 lock.release()
 
@@ -221,10 +272,12 @@ class Executor:
             lock = self.resource.acquire_lock(timeout=0)
         except TrinityError:
             return 0
+        stale_seconds = max(0.0, float(self.config.get("resources.recovery_stale_seconds", 60)))
         try:
             count = self.task_manager.fail_running_tasks(
-                "Trinity dừng giữa tác vụ hoặc lock bị mất; "
-                "task được đánh dấu FAILED khi khởi động lại"
+                "Trinity dừng giữa tác vụ hoặc lease đã hết hạn; "
+                "task được đánh dấu FAILED khi khởi động lại",
+                stale_before=time.time() - stale_seconds,
             )
         finally:
             lock.release()
@@ -371,12 +424,31 @@ class Executor:
 
         steps: List[StepReport] = []
         claimed = False
+        heartbeat: Optional[TaskHeartbeat] = None
         try:
             actor = approver or self._current_actor()
             scope = self._approval_scope(route)
-            task = self.task_manager.claim_for_resume(task_id, actor, scope)
+            task = self.task_manager.claim_for_resume(
+                task_id,
+                actor,
+                scope,
+                runner_id=self.runner_id,
+                pid=os.getpid(),
+                host=self.runner_host,
+            )
             claimed = True
-            self._audit("resume_started", task_id, {"actor": actor, "scope": scope})
+            self._audit(
+                "resume_started",
+                task_id,
+                {"actor": actor, "scope": scope, "runner_id": self.runner_id},
+            )
+            heartbeat = TaskHeartbeat(
+                self.task_manager,
+                task_id,
+                self.runner_id,
+                interval=float(self.config.get("resources.heartbeat_interval_seconds", 5)),
+            )
+            heartbeat.start()
             task = self._run_plan(route, prompt, steps, timeout, True)
             if task["status"] == COMPLETED:
                 self._audit("task_completed", task_id, {"steps": len(steps), "resumed": True})
@@ -422,6 +494,8 @@ class Executor:
                 steps=steps,
             )
         finally:
+            if heartbeat is not None:
+                heartbeat.stop()
             lock.release()
 
     def _resume_blocked(

@@ -26,6 +26,9 @@ resources:
   lock_path: "logs/.trinity.lock"
   # deny = từ chối chạy khi RAM thấp; warn = chỉ cảnh báo.
   on_low_memory: deny
+  # Runner lease: heartbeat mỗi 5s; chỉ recover task RUNNING khi lease cũ > 60s.
+  heartbeat_interval_seconds: 5
+  recovery_stale_seconds: 60
 
 guard:
   # Chỉ các executable này được phép chạy qua shell-command guard.

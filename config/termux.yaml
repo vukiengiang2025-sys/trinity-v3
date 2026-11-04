@@ -25,6 +25,9 @@ resources:
   max_timeout_seconds: 1800
   lock_path: "logs/.trinity.lock"
   on_low_memory: deny
+  # Termux có thể chậm hơn; lease vẫn phải còn hiệu lực trước khi recovery.
+  heartbeat_interval_seconds: 5
+  recovery_stale_seconds: 60
 
 guard:
   allowed_commands:

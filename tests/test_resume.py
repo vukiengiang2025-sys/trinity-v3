@@ -203,7 +203,7 @@ class ResumeTests(unittest.TestCase):
             columns = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
         finally:
             conn.close()
-        for name in ("plan_json", "workspace", "approved_by", "approved_at", "approval_scope", "resume_count"):
+        for name in ("plan_json", "workspace", "approved_by", "approved_at", "approval_scope", "resume_count", "runner_id", "runner_pid", "runner_host", "heartbeat_at"):
             self.assertIn(name, columns)
 
 

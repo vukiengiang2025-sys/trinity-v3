@@ -93,7 +93,7 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 | `python3 trinity.py status` | PASS — hiển thị 3 adapter |
 | `python3 trinity.py doctor` | PASS — 0 FAIL, 3 WARN (Hermes/OpenClaw unavailable; OpenCode chưa cấu hình agent) |
 | `python3 trinity.py run --dry-run "..."` | PASS — không tạo DB/audit |
-| Unit/integration tests v3.1 | PASS — 165 test, 0 failure, 0 error |
+| Unit/integration tests v3.1 | PASS — 167 test, 0 failure, 0 error |
 | GitHub Actions | PASS — Python 3.9 và 3.12 (v3.0 và v3.1) |
 
 ## 8. Phân loại tổng hợp
@@ -116,8 +116,8 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 
 ## 9. Cập nhật kiểm định v3.1
 
-- CI v3.1: **success** cho cả `unittest (3.9)` và `unittest (3.12)` với 153 test (run 41860781598); bộ 165 test chạy sau push.
-- Bộ test v3.1: **165 test**, 0 failure, 0 error.
+- CI v3.1: **success** cho cả `unittest (3.9)` và `unittest (3.12)` với 153 test (run 41860781598); bộ 167 test chạy sau push.
+- Bộ test v3.1: **167 test**, 0 failure, 0 error.
 - Lock `fcntl`: phát hiện khả năng fail-open; đã sửa thành **fail closed** khi thiếu fcntl/non-POSIX/filesystem không hỗ trợ.
 - Task resume: đã triển khai cùng Task ID, plan JSON, approval actor/time/scope, atomic claim.
 - OpenCode: mặc định không dùng agent built-in; thiếu `agent` cấu hình → `DENIED`.

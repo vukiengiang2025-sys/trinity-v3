@@ -20,8 +20,8 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 > - **Đã chạy read-only prompt thật** qua OpenCode với agent tạm `trinity-readonly` trong workspace giả: task `TRN-20261104-152925-1c79c9` COMPLETED, workspace/Git không đổi, `/etc/passwd` bị `external_directory` deny.
 > - Chưa xác minh agent production (`build`/`general`); mặc định vẫn fail closed nếu chưa cấu hình `agent`.
 > - HTTP API của OpenCode chỉ được health-check; endpoint thực thi có auth **chưa xác minh**, nên mặc định tắt.
-> - CI GitHub Actions: **v3.1 (153 test) PASS**; bộ 165 test chạy sau push.
-> - **165 unittest — 0 failure**.
+> - CI GitHub Actions: **v3.1 (153 test) PASS**; bộ 167 test chạy sau push.
+> - **167 unittest — 0 failure**.
 >
 > Trinity không tuyên bố tích hợp đầy đủ ba agent khi adapter tương ứng chưa được xác minh.
 
@@ -386,7 +386,7 @@ Vì chưa xác minh OpenClaw, `run "chạy lệnh ..."` sẽ dừng ở `FAILED`
 - Khóa tuần tự `fcntl` **fail closed** nếu filesystem không hỗ trợ flock hoặc không phải POSIX.
 - Resume dùng conditional claim trong SQLite, lưu actor/time/scope, không tạo task trùng.
 - OpenCode **không tự dùng agent mặc định**; thiếu `agent` cấu hình → `DENIED`.
-- Crash recovery: task `RUNNING` còn sót chỉ bị đánh dấu `FAILED` khi lock free; không tự đánh dấu `COMPLETED`.
+- Crash recovery: task `RUNNING` chỉ bị đánh dấu `FAILED` khi lock free **và** heartbeat/lease đã cũ; heartbeat mới không bị đụng. Không tự đánh dấu `COMPLETED`.
 - Env secret values (`*_SECRET`, `*_TOKEN`, ...) bị redact khỏi stdout/stderr.
 - Baseline read-only có approval policy + hash/deny-rule tripwire; cập nhật phải review và commit mới.
 
@@ -400,7 +400,7 @@ Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên tr
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Kết quả lần chạy gần nhất: **165 test, 0 failure, 0 error**. CI v3.1 (153 test) pass; bộ 165 test chạy sau push. Xem `docs/TEST_REPORT.md`.
+Kết quả lần chạy gần nhất: **167 test, 0 failure, 0 error**. CI v3.1 (153 test) pass; bộ 167 test chạy sau push. Xem `docs/TEST_REPORT.md`.
 
 Các nhóm đã kiểm tra:
 
@@ -414,7 +414,7 @@ Các nhóm đã kiểm tra:
 - CLI: version/status/config/tasks/task/run/resume dry-run, profile, không ghi DB/audit khi dry-run.
 - Executor: tuần tự, dừng khi lỗi, approval, resource/lock failure, redaction.
 - Process: `PWD` đồng bộ `cwd`, timeout kill process group, output + env-secret redaction.
-- Crash recovery: orphan RUNNING → FAILED khi lock free; dry-run không recovery; lock busy không đụng task.
+- Crash recovery: runner lease/heartbeat; orphan RUNNING → FAILED khi lock free + lease cũ; heartbeat mới/lock busy không đụng task; dry-run không recovery.
 - Baseline: hash, deny→allow mutation detection, approval metadata.
 - Router negation: “không chạy shell” không tạo bước AUTOMATION.
 - Termux simulation: PREFIX detection, profile thresholds, sysconf fallback, fcntl unsupported → fail closed, non-POSIX fail closed.

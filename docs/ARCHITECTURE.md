@@ -137,7 +137,7 @@ Luồng `run` thật:
 
 Không có thread pool, không chạy song song, không retry vô hạn.
 
-Khởi động lại: `Executor.recover_interrupted_tasks()` acquire lock non-blocking; nếu lock free, mọi task `RUNNING` còn sót được đánh dấu `FAILED` với event `recovered`. Nếu lock đang bận, không đụng task. Dry-run không recovery. Không task nào được đánh dấu `COMPLETED` nếu chưa có adapter result hợp lệ.
+Khởi động lại: `Executor.recover_interrupted_tasks()` acquire lock non-blocking. Mỗi runner có `runner_id` (host:pid:nonce) và heartbeat mỗi 5s. Chỉ task `RUNNING` có heartbeat cũ hơn `recovery_stale_seconds` (mặc định 60s) hoặc chưa có heartbeat mới bị đánh dấu `FAILED` với event `recovered`. Nếu lock đang bận hoặc heartbeat còn mới, không đụng task — kể cả khi lock file bị mất. Dry-run không recovery. Không task nào được đánh dấu `COMPLETED` nếu chưa có adapter result hợp lệ.
 
 Luồng `resume` (v3.1):
 
@@ -281,5 +281,5 @@ Không sửa executor để biết chi tiết CLI của agent mới; toàn bộ 
 - OpenCode execution mặc định fail closed nếu chưa cấu hình `agent`; không có agent built-in nào vừa deny edit vừa deny shell.
 - OpenCode read-only đã được kiểm chứng với agent tạm `trinity-readonly`; agent production (`build`/`general`) và HTTP execution vẫn chưa.
 - Guard không kiểm soát công cụ nội bộ của OpenCode sau khi tiến trình được khởi chạy; permission của agent là lớp kiểm soát chính.
-- Recovery chỉ đánh dấu task orphan `FAILED`; không đảm bảo kill mọi process detached.
+- Recovery dùng lease/heartbeat, không chỉ lock; task có heartbeat mới không bị đánh dấu sai. Recovery vẫn chỉ đánh dấu task orphan `FAILED`, không đảm bảo kill mọi process detached.
 - Xóa lock file khi đang chạy có thể phá mutual exclusion; đây là quy tắc vận hành.

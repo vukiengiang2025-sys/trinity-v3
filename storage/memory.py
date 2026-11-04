@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -23,7 +24,7 @@ CANCELLED = "CANCELLED"
 
 STATUSES = (PENDING, RUNNING, WAITING_APPROVAL, COMPLETED, FAILED, CANCELLED)
 TERMINAL_STATUSES = {COMPLETED, FAILED, CANCELLED}
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 ALLOWED_TRANSITIONS = {
     PENDING: {RUNNING, WAITING_APPROVAL, FAILED, CANCELLED},
     WAITING_APPROVAL: {RUNNING, FAILED, CANCELLED},
@@ -52,7 +53,11 @@ CREATE TABLE IF NOT EXISTS tasks (
     approved_by TEXT NOT NULL DEFAULT '',
     approved_at TEXT NOT NULL DEFAULT '',
     approval_scope TEXT NOT NULL DEFAULT '',
-    resume_count INTEGER NOT NULL DEFAULT 0
+    resume_count INTEGER NOT NULL DEFAULT 0,
+    runner_id TEXT NOT NULL DEFAULT '',
+    runner_pid INTEGER NOT NULL DEFAULT 0,
+    runner_host TEXT NOT NULL DEFAULT '',
+    heartbeat_at REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS task_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,6 +80,10 @@ MIGRATION_COLUMNS = {
     "approved_at": "TEXT NOT NULL DEFAULT ''",
     "approval_scope": "TEXT NOT NULL DEFAULT ''",
     "resume_count": "INTEGER NOT NULL DEFAULT 0",
+    "runner_id": "TEXT NOT NULL DEFAULT ''",
+    "runner_pid": "INTEGER NOT NULL DEFAULT 0",
+    "runner_host": "TEXT NOT NULL DEFAULT ''",
+    "heartbeat_at": "REAL NOT NULL DEFAULT 0",
 }
 
 
@@ -278,6 +287,60 @@ class TaskManager:
             raise StorageError("không đọc lại được task sau cập nhật")
         return task
 
+    def mark_running(self, task_id: str, runner_id: str, pid: int, host: str) -> Dict[str, Any]:
+        """Atomically move PENDING -> RUNNING and establish a runner lease."""
+
+        conn = self._connect(create=True)
+        if conn is None:
+            raise StorageError(f"không tìm thấy task: {task_id}")
+        now = utc_now()
+        try:
+            cursor = conn.execute(
+                """
+                UPDATE tasks
+                   SET status = ?, updated_at = ?, runner_id = ?, runner_pid = ?,
+                       runner_host = ?, heartbeat_at = ?
+                 WHERE id = ? AND status = ?
+                """,
+                (RUNNING, now, truncate(runner_id, 200), int(pid), truncate(host, 200),
+                 time.time(), str(task_id), PENDING),
+            )
+            if cursor.rowcount != 1:
+                row = conn.execute("SELECT status FROM tasks WHERE id = ?", (str(task_id),)).fetchone()
+                current = row["status"] if row else "missing"
+                raise StorageError(f"không thể bắt đầu task {task_id}: trạng thái {current}")
+            conn.execute(
+                "INSERT INTO task_events (task_id, created_at, kind, message) VALUES (?, ?, ?, ?)",
+                (str(task_id), now, "status", f"{PENDING} -> {RUNNING}"),
+            )
+            conn.commit()
+        except StorageError:
+            conn.rollback()
+            raise
+        except sqlite3.Error as exc:
+            conn.rollback()
+            raise StorageError(f"không bắt đầu được task: {exc}") from exc
+        task = self.get_task(str(task_id))
+        if task is None:
+            raise StorageError("không đọc lại được task sau khi bắt đầu")
+        return task
+
+    def heartbeat(self, task_id: str, runner_id: str) -> bool:
+        """Refresh the lease only if this runner still owns a RUNNING task."""
+
+        conn = self._connect(create=False)
+        if conn is None:
+            return False
+        try:
+            cursor = conn.execute(
+                "UPDATE tasks SET heartbeat_at = ? WHERE id = ? AND status = ? AND runner_id = ?",
+                (time.time(), str(task_id), RUNNING, str(runner_id)),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
+        except sqlite3.Error:
+            return False
+
     def add_event(self, task_id: str, kind: str, message: str) -> None:
         conn = self._connect(create=False)
         if conn is None:
@@ -294,18 +357,25 @@ class TaskManager:
     def cancel_task(self, task_id: str) -> Dict[str, Any]:
         return self.update_status(task_id, CANCELLED, error="người dùng hủy tác vụ")
 
-    def fail_running_tasks(self, reason: str) -> int:
+    def fail_running_tasks(self, reason: str, stale_before: Optional[float] = None) -> int:
         """Mark orphaned RUNNING tasks as FAILED after a restart.
 
-        The caller must hold the single-task lock; this method intentionally
-        does not acquire it so recovery and execution use one policy point.
+        With ``stale_before``, only tasks whose heartbeat is old (or missing)
+        are touched.  A fresh heartbeat means another runner may still be
+        alive even if the lock file was lost.  The caller must hold the
+        single-task lock; this method intentionally does not acquire it.
         """
 
         conn = self._connect(create=False)
         if conn is None:
             return 0
+        sql = "SELECT id FROM tasks WHERE status = ?"
+        params: List[Any] = [RUNNING]
+        if stale_before is not None:
+            sql += " AND (heartbeat_at = 0 OR heartbeat_at <= ?)"
+            params.append(float(stale_before))
         try:
-            rows = conn.execute("SELECT id FROM tasks WHERE status = ?", (RUNNING,)).fetchall()
+            rows = conn.execute(sql, params).fetchall()
         except sqlite3.OperationalError:
             return 0
         count = 0
@@ -316,7 +386,15 @@ class TaskManager:
             count += 1
         return count
 
-    def claim_for_resume(self, task_id: str, approver: str, scope: str) -> Dict[str, Any]:
+    def claim_for_resume(
+        self,
+        task_id: str,
+        approver: str,
+        scope: str,
+        runner_id: str = "",
+        pid: int = 0,
+        host: str = "",
+    ) -> Dict[str, Any]:
         """Atomically claim a WAITING_APPROVAL task for exactly one runner.
 
         The conditional UPDATE is the duplicate-execution barrier: only one
@@ -336,10 +414,13 @@ class TaskManager:
                 """
                 UPDATE tasks
                    SET status = ?, updated_at = ?, approved_by = ?, approved_at = ?,
-                       approval_scope = ?, resume_count = resume_count + 1
+                       approval_scope = ?, resume_count = resume_count + 1,
+                       runner_id = ?, runner_pid = ?, runner_host = ?, heartbeat_at = ?
                  WHERE id = ? AND status = ?
                 """,
-                (RUNNING, now, safe_actor, now, safe_scope, str(task_id), WAITING_APPROVAL),
+                (RUNNING, now, safe_actor, now, safe_scope,
+                 truncate(runner_id, 200), int(pid), truncate(host, 200), time.time(),
+                 str(task_id), WAITING_APPROVAL),
             )
             if cursor.rowcount != 1:
                 row = conn.execute("SELECT status FROM tasks WHERE id = ?", (str(task_id),)).fetchone()
@@ -394,6 +475,10 @@ class TaskManager:
             ("approved_at", ""),
             ("approval_scope", ""),
             ("resume_count", 0),
+            ("runner_id", ""),
+            ("runner_pid", 0),
+            ("runner_host", ""),
+            ("heartbeat_at", 0.0),
         ):
             task.setdefault(key, default)
         try:

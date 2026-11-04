@@ -48,7 +48,7 @@ Quy tắc:
 - OpenCode phải có `agent` tường minh; không bật lại fallback agent mặc định.
 - Giữ `standalone: true` và `PWD` đồng bộ `cwd` cho adapter OpenCode.
 - Giữ baseline read-only và approval policy; không nới deny rule mà không review.
-- Recovery chỉ đánh dấu task `RUNNING` orphan thành `FAILED` khi lock free; không đánh dấu `COMPLETED`.
+- Recovery dùng runner lease/heartbeat; chỉ đánh dấu task `RUNNING` orphan thành `FAILED` khi lock free và heartbeat cũ; không đánh dấu `COMPLETED`.
 - Không bỏ env-secret redaction hoặc dry-run recovery guard.
 - Không nới lỏng `fcntl` fail-closed hoặc thêm fallback chạy không khóa.
 - Resume phải giữ Task ID cũ, re-check Guard/Resource/adapter, dùng `claim_for_resume`; không tạo task trùng.
