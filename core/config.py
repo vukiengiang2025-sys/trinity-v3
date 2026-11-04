@@ -81,6 +81,9 @@ DEFAULTS: Dict[str, Any] = {
             "format": "json",
             "model": None,
             "agent": None,
+            # Controlled-write agent.  Must be configured explicitly; never
+            # falls back to the read-only agent or OpenCode's default.
+            "write_agent": None,
             # Safety default: do not fall back to OpenCode's default agent.
             "require_explicit_agent": True,
         },

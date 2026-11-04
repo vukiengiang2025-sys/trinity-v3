@@ -61,6 +61,17 @@ class ExecutorTests(unittest.TestCase):
         task = TaskManager(self.config.db_path).get_task(outcome.task_id)
         self.assertEqual(task["status"], "WAITING_APPROVAL")
 
+    def test_write_requires_approval_then_uses_write_action(self):
+        adapter = FakeAdapter("opencode")
+        executor = self.executor({"opencode": adapter})
+        waiting = executor.execute("sửa lỗi python", write=True, approve=False)
+        self.assertEqual(waiting.status, "WAITING_APPROVAL")
+        self.assertEqual(adapter.calls, [])
+        live = executor.execute("sửa lỗi python", write=True, approve=True)
+        self.assertEqual(live.status, "COMPLETED")
+        self.assertEqual(len(adapter.calls), 1)
+        self.assertEqual(adapter.calls[0].action, "code_write")
+
     def test_high_risk_with_approval_executes(self):
         adapter = FakeAdapter("opencode", stdout="done")
         executor = self.executor({"opencode": adapter})

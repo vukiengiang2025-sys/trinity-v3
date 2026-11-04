@@ -1,0 +1,39 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agents": {
+    "trinity-write": {
+      "description": "Trinity controlled-write agent: workspace edit + approved test commands only",
+      "mode": "primary",
+      "steps": 12,
+      "permissions": [
+        {"action": "*", "resource": "*", "effect": "deny"},
+        {"action": "read", "resource": "*", "effect": "allow"},
+        {"action": "glob", "resource": "*", "effect": "allow"},
+        {"action": "grep", "resource": "*", "effect": "allow"},
+        {"action": "list", "resource": "*", "effect": "allow"},
+        {"action": "edit", "resource": "*", "effect": "allow"},
+        {"action": "read", "resource": "*.env", "effect": "deny"},
+        {"action": "read", "resource": "*.env.*", "effect": "deny"},
+        {"action": "read", "resource": "/etc/**", "effect": "deny"},
+        {"action": "read", "resource": "/home/**", "effect": "deny"},
+        {"action": "read", "resource": "/root/**", "effect": "deny"},
+        {"action": "read", "resource": "/proc/**", "effect": "deny"},
+        {"action": "read", "resource": "/sys/**", "effect": "deny"},
+        {"action": "external_directory", "resource": "*", "effect": "deny"},
+        {"action": "bash", "resource": "*", "effect": "deny"},
+        {"action": "bash", "resource": "git status*", "effect": "allow"},
+        {"action": "bash", "resource": "git diff*", "effect": "allow"},
+        {"action": "bash", "resource": "git log*", "effect": "allow"},
+        {"action": "bash", "resource": "python3 -m unittest*", "effect": "allow"},
+        {"action": "bash", "resource": "python3 -m py_compile*", "effect": "allow"},
+        {"action": "webfetch", "resource": "*", "effect": "deny"},
+        {"action": "websearch", "resource": "*", "effect": "deny"},
+        {"action": "task", "resource": "*", "effect": "deny"},
+        {"action": "skill", "resource": "*", "effect": "deny"},
+        {"action": "todowrite", "resource": "*", "effect": "deny"},
+        {"action": "question", "resource": "*", "effect": "deny"},
+        {"action": "browser", "resource": "*", "effect": "deny"}
+      ]
+    }
+  }
+}

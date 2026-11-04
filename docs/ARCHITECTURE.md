@@ -98,6 +98,8 @@ Thứ tự plan cố định: **BRAIN → LOGIC → MUSCLE**. Router chỉ trả
 
 Router bỏ qua keyword bị phủ định trong cùng mệnh đề (ví dụ “không chạy shell”, “không dùng memory”), tránh thêm bước AUTOMATION/MEMORY sai. Test hồi quy nằm trong `tests/test_router.py`.
 
+Controlled write: `route(write=True)` chỉ chấp nhận nhiệm vụ CODING, đổi action thành `code_write`, ép risk `high`; executor chỉ dispatch khi có `--write --approve`.
+
 ### 3.3 Safety Guard — `core/guard.py`
 
 Kiểm tra thuần túy, không thực thi:
@@ -219,11 +221,13 @@ Mọi subprocess dùng `run_process(argv, timeout, ...)`: `shell=False`, `start_
 OpenCode adapter có thêm policy riêng (v3.1):
 
 - `require_explicit_agent: true` + `agent: null` → `DENIED`, không dùng agent mặc định.
-- Chỉ operator đặt `agent` sau khi kiểm tra `opencode debug agents`.
+- `code_task` dùng `agent` (`trinity-readonly`); `code_write` dùng `write_agent` (`trinity-write`) và không fallback.
+- Chỉ operator đặt `agent`/`write_agent` sau khi kiểm tra `opencode debug agents`.
 - `standalone: true` mặc định: server riêng cho lần chạy, tránh service/cache của OpenCode UI.
 - Output JSON được kiểm tra hợp lệ (`json_valid`); lỗi permission được đánh dấu `permission_required`.
 - Không truyền `--auto`.
 - Đã kiểm chứng read-only thật với agent project-local `trinity-readonly`: xem `docs/OPENCODE_SANDBOX.md`.
+- Đã kiểm chứng controlled write thật với `trinity-write` trong sandbox: xem `docs/OPENCODE_WRITE.md`.
 
 ## 4. Luồng dữ liệu
 
@@ -279,7 +283,7 @@ Không sửa executor để biết chi tiết CLI của agent mới; toàn bộ 
 - Không có retry/queue dài hạn; mỗi `run` là một task tuần tự.
 - Task `WAITING_APPROVAL` chỉ resume được nếu còn `plan_json`/`workspace`; task v3.0 cũ bị từ chối.
 - OpenCode execution mặc định fail closed nếu chưa cấu hình `agent`; không có agent built-in nào vừa deny edit vừa deny shell.
-- OpenCode read-only đã được kiểm chứng với agent tạm `trinity-readonly`; agent production (`build`/`general`) và HTTP execution vẫn chưa.
+- OpenCode read-only đã được kiểm chứng với `trinity-readonly`; controlled write đã được kiểm chứng trong sandbox với `trinity-write`; agent production (`build`/`general`) và HTTP execution vẫn chưa.
 - Guard không kiểm soát công cụ nội bộ của OpenCode sau khi tiến trình được khởi chạy; permission của agent là lớp kiểm soát chính.
 - Recovery dùng lease/heartbeat, không chỉ lock; task có heartbeat mới không bị đánh dấu sai. Recovery vẫn chỉ đánh dấu task orphan `FAILED`, không đảm bảo kill mọi process detached.
 - Xóa lock file khi đang chạy có thể phá mutual exclusion; đây là quy tắc vận hành.

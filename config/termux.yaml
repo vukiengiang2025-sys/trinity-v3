@@ -62,6 +62,7 @@ adapters:
     model: null
     # Bắt buộc chọn agent đã kiểm tra permission trước khi execute.
     agent: null
+    write_agent: null
     require_explicit_agent: true
 
   hermes:

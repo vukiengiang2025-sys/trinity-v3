@@ -184,6 +184,35 @@ class OpenCodeAdapterTests(AdapterTestBase):
         ready, reason = adapter.execution_ready()
         self.assertTrue(ready, reason)
 
+    def test_write_agent_is_selected_for_code_write(self):
+        fake = make_fake_executable(self.root, "opencode-fake")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        self.config.data["adapters"]["opencode"]["agent"] = "read-agent"
+        self.config.data["adapters"]["opencode"]["write_agent"] = "write-agent"
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        process = ProcessResult([], 0, "{}", "", False, 0.1)
+        with mock.patch("adapters.opencode.run_process", return_value=process) as runner:
+            result = adapter.execute(self.request(action="code_write"))
+        self.assertEqual(result.status, ResultStatus.SUCCESS)
+        argv = runner.call_args.args[0]
+        self.assertIn("write-agent", argv)
+        self.assertNotIn("read-agent", argv)
+        self.assertTrue(adapter.execution_ready("code_write")[0])
+
+    def test_write_without_write_agent_is_denied(self):
+        fake = make_fake_executable(self.root, "opencode-fake")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        self.config.data["adapters"]["opencode"]["agent"] = "read-agent"
+        self.config.data["adapters"]["opencode"]["write_agent"] = None
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        ready, reason = adapter.execution_ready("code_write")
+        self.assertFalse(ready)
+        self.assertIn("write_agent", reason)
+        result = adapter.execute(self.request(action="code_write"))
+        self.assertEqual(result.status, ResultStatus.DENIED)
+
     def test_standalone_is_used_and_auto_is_never_passed(self):
         fake = make_fake_executable(self.root, "opencode-fake")
         self.config.data["adapters"]["opencode"]["binary"] = str(fake)

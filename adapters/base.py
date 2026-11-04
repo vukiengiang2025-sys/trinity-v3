@@ -128,7 +128,7 @@ class BaseAdapter(ABC):
     def is_available(self) -> bool:
         return self.discover().status == AdapterStatus.AVAILABLE
 
-    def execution_ready(self) -> Tuple[bool, str]:
+    def execution_ready(self, action: str = "") -> Tuple[bool, str]:
         """Return whether a real task may be dispatched to this adapter.
 
         Adapters override this when discovery alone is not enough (for example

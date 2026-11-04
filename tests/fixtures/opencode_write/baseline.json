@@ -1,0 +1,13 @@
+{
+  "agent": "trinity-write",
+  "mode": "primary",
+  "config_sha256": "3c323dd145eb1cf2b6d7df6e8241dbcd94e4a820dead8cd958080035f531096e",
+  "frozen_at": "2026-11-04",
+  "approval_task_id": "TRN-20261104-164146-ac673b",
+  "live_write_task_id": "TRN-20261104-164146-bfed3b",
+  "live_write_status": "COMPLETED",
+  "test_gate": "python3 -m unittest: 2/2 PASS",
+  "workspace_changed_by_design": true,
+  "sandbox": "/tmp/trinity-write-sandbox",
+  "approval": "required: run --write --approve; write agent only in disposable workspace"
+}

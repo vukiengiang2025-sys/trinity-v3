@@ -137,10 +137,11 @@ class Executor:
         dry_run: bool = False,
         approve: bool = False,
         timeout: Optional[int] = None,
+        write: bool = False,
     ) -> ExecutionOutcome:
         if not dry_run:
             self.recover_interrupted_tasks()
-        route = self.router.route(prompt)
+        route = self.router.route(prompt, write=write)
 
         if dry_run:
             resource = self.resource.preflight(dry_run=True)
@@ -154,12 +155,16 @@ class Executor:
                 resource=resource,
             )
 
-        if route.risk_level in self.config.approval_risks and not approve:
+        if (route.risk_level in self.config.approval_risks or write) and not approve:
             task = self._create_task(route, prompt, status=PENDING)
             task = self.task_manager.update_status(
                 route.task_id,
                 WAITING_APPROVAL,
-                error=f"cần phê duyệt cho mức rủi ro {route.risk_level}; dùng resume --approve",
+                error=(
+                    f"cần phê duyệt cho mức rủi ro {route.risk_level}"
+                    + (" và chế độ controlled-write" if write else "")
+                    + "; dùng resume --approve"
+                ),
             )
             self._audit("approval_required", route.task_id, {"risk": route.risk_level, "task_type": route.task_type})
             return ExecutionOutcome(
@@ -341,6 +346,7 @@ class Executor:
             risk_level=str(task.get("risk_level", "high")),
             matched_rules=["resume"],
             approval_required=True,
+            write_mode=any(step.get("action") == "code_write" for step in plan),
             raw_prompt=prompt,
         )
 
@@ -398,7 +404,7 @@ class Executor:
             if adapter is None:
                 raise TrinityError(f"không có adapter {adapter_name!r} để resume")
             try:
-                ready, detail = adapter.execution_ready()
+                ready, detail = adapter.execution_ready(str(step.get("action", "")))
             except Exception as exc:
                 raise TrinityError(f"không kiểm tra được adapter {adapter_name}: {exc}") from exc
             if not ready:

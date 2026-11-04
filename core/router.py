@@ -49,6 +49,7 @@ class Route:
     risk_level: str
     matched_rules: List[str] = field(default_factory=list)
     approval_required: bool = False
+    write_mode: bool = False
     raw_prompt: str = ""
 
     def as_dict(self) -> dict:
@@ -60,6 +61,7 @@ class Route:
             "risk_level": self.risk_level,
             "matched_rules": list(self.matched_rules),
             "approval_required": self.approval_required,
+            "write_mode": self.write_mode,
         }
 
 
@@ -236,7 +238,7 @@ class Router:
     def __init__(self, config: AppConfig):
         self.config = config
 
-    def route(self, prompt: str, task_id: Optional[str] = None) -> Route:
+    def route(self, prompt: str, task_id: Optional[str] = None, write: bool = False) -> Route:
         if not isinstance(prompt, str) or not prompt.strip():
             raise RouterError("nội dung nhiệm vụ không được rỗng")
         normalized = normalize(prompt)
@@ -255,9 +257,13 @@ class Router:
         else:
             task_type = categories[0].upper()
 
+        if write and "coding" not in categories:
+            raise RouterError(
+                "--write chỉ áp dụng cho nhiệm vụ CODING; prompt không có bước sửa mã rõ ràng"
+            )
         selected_adapter = "multi" if task_type == "MIXED" else ADAPTER_FOR_CATEGORY[categories[0]]
-        plan = self._build_plan(categories, normalized)
-        risk = self._risk(normalized, task_type)
+        plan = self._build_plan(categories, normalized, write=write)
+        risk = "high" if write else self._risk(normalized, task_type)
 
         return Route(
             task_id=task_id or self.new_task_id(),
@@ -267,6 +273,7 @@ class Router:
             risk_level=risk,
             matched_rules=[f"{name}:{','.join(values)}" for name, values in hits.items() if values],
             approval_required=risk in self.config.approval_risks,
+            write_mode=write,
             raw_prompt=prompt,
         )
 
@@ -275,7 +282,7 @@ class Router:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         return f"TRN-{stamp}-{secrets.token_hex(3)}"
 
-    def _build_plan(self, categories: List[str], normalized: str) -> List[Dict[str, str]]:
+    def _build_plan(self, categories: List[str], normalized: str, write: bool = False) -> List[Dict[str, str]]:
         # Canonical order: recall context (BRAIN), change code (LOGIC), then
         # touch the system (MUSCLE).  Execution is strictly sequential.
         if categories == ["general"]:
@@ -286,6 +293,8 @@ class Router:
         for index, category in enumerate(ordered, start=1):
             adapter = ADAPTER_FOR_CATEGORY[category]
             action = ACTION_FOR_CATEGORY[category]
+            if write and category == "coding":
+                action = "code_write"
             if category == "memory" and _hits(normalized, STORE_KEYWORDS):
                 action = "memory_store"
             plan.append(

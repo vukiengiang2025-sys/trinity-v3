@@ -80,6 +80,7 @@ Chặn vĩnh viễn:
 - `resume` dùng Task ID cũ; không tạo task trùng. `claim_for_resume` là UPDATE có điều kiện `WHERE status='WAITING_APPROVAL'`, lưu `approved_by`, `approved_at`, `approval_scope` (hash plan), `resume_count`.
 - Resume re-check profile, workspace đã lưu, Guard, Resource và adapter availability. Nếu chưa đủ điều kiện, task vẫn `WAITING_APPROVAL`.
 - Task v3.0 thiếu `plan_json`/`workspace` bị từ chối resume thay vì đoán.
+- Controlled write yêu cầu `--write --approve`; `--approve` một mình không bật write. `code_write` dùng `write_agent` riêng, không fallback sang read-only/default. Xem `docs/OPENCODE_WRITE.md`.
 - Baseline read-only có approval policy: `tests/fixtures/opencode_readonly/APPROVAL.md`; test phát hiện hash change và `deny → allow` mutation. Cập nhật baseline phải có review + approval metadata + commit mới.
 
 ### 3.5 Tài nguyên
@@ -165,6 +166,8 @@ Chặn vĩnh viễn:
 | Low | Lỗi permission OpenCode không được phân loại | **Đã bổ sung** `permission_required` |
 | Low | Chưa có migration DB v3.0 → v3.1 | **Đã sửa**: ALTER TABLE + test |
 
+Residual write risk: `trinity-write` có quyền edit trong workspace; approval theo task chưa phải approval từng hành động. Không dùng trên repo thật trước khi có backup/OS sandbox và review diff.
+
 Residual risk:
 
 - `--approve` + OpenCode agent có shell/edit vẫn có thể thay đổi ngoài workspace. Chỉ dùng agent đã kiểm tra permission và workspace tin cậy.
@@ -198,6 +201,7 @@ Xem `docs/TEST_REPORT.md`. Các test bao gồm:
 - Adapter thiếu tool → UNAVAILABLE; OpenClaw thiếu guard/approval → DENIED.
 - OpenCode thiếu agent tường minh → DENIED; permission error được đánh dấu.
 - OpenCode read-only thật: read trong workspace được phép; edit/bash bị ẩn; `/etc/passwd` bị `external_directory` deny; workspace/Git không đổi.
+- Controlled write thật trong sandbox: `trinity-write` sửa `calc.py`/`test_calc.py`, test gate 2/2 PASS; `--write` không approve bị chặn; bash ngoài allowlist bị deny.
 - Durability 3 run thật COMPLETED; agent không tồn tại/timeout FAILED; không còn standalone server treo.
 - Frozen baseline config hash + rules: `tests/fixtures/opencode_readonly/`.
 - JSON rỗng/sai định dạng/error event exit 0 đều FAILED (fail closed).

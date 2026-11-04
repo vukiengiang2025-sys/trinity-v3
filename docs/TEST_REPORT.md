@@ -3,10 +3,10 @@
 - **Ngày:** 2026-11-04
 - **Môi trường:** Linux Mint 22.3, Python 3.12.3, OpenCode v2.2.5
 - **Lệnh:** `python3 -m unittest discover -s tests -t . -v`
-- **Kết quả:** **174 test — 0 failure — 0 error — OK**
+- **Kết quả:** **185 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
-- **Sau v3.1:** 174 test (+59)
-- **Local 3.9/3.12:** 174 test PASS; **CI:** v3.1 (174 test) PASS trên Python 3.9/3.12
+- **Sau v3.1:** 185 test (+70)
+- **Local 3.9/3.12:** 185 test PASS; **CI:** 174 test PASS, 185 queued
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -14,20 +14,21 @@
 | File | Số test | Nội dung |
 |---|---:|---|
 | `test_config.py` | 10 | Profile Linux/Termux, auto-detect, profile sai, allowed roots, mask secrets |
-| `test_router.py` | 13 | Phân loại, risk, plan, Task ID, negation-aware routing |
+| `test_router.py` | 15 | Phân loại, risk, plan, Task ID, negation-aware routing |
 | `test_guard.py` | 20 | Path, symlink, file nhạy cảm, command allowlist, Git safety, injection |
 | `test_resource.py` | 11 | RAM đọc được/không đọc được, sysconf fallback, RAM/disk thấp, lock, timeout |
 | `test_task.py` | 12 | Task lifecycle, transition, event, permission, missing DB, redaction, audit |
-| `test_adapters.py` | 27 | Missing tool, fake CLI, timeout, JSON empty/invalid/error event, permission, OpenClaw/Hermes, default-agent deny, standalone |
+| `test_adapters.py` | 29 | Missing tool, fake CLI, timeout, JSON empty/invalid/error event, permission, OpenClaw/Hermes, default-agent deny, standalone |
 | `test_opencode_baseline.py` | 9 | Frozen config hash, deny rules, durability records, failure modes, no secrets |
-| `test_executor.py` | 13 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
+| `test_executor.py` | 14 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
 | `test_resume.py` | 16 | Resume cùng Task ID, approval record, atomic claim, mismatch, migration, lock fail-closed |
-| `test_cli.py` | 18 | version/status/config/tasks/task/run/resume, dry-run, exit code |
+| `test_cli.py` | 19 | version/status/config/tasks/task/run/resume, dry-run, exit code |
 | `test_utils.py` | 11 | Redaction, truncate, mask mapping, subprocess timeout, PWD/cwd consistency |
 | `test_recovery.py` | 11 | Orphan RUNNING → FAILED, lock busy, idempotent, dry-run, CLI recovery |
 | `test_termux_self_test.py` | 1 | One-command Termux/Linux self-test |
+| `test_opencode_write_baseline.py` | 5 | Frozen write agent hash/permissions/evidence |
 | `test_security_static.py` | 2 | AST check no shell=True/os.system; no credential literals |
-| **Tổng** | **174** | |
+| **Tổng** | **185** | |
 
 ## 2. CI
 
@@ -36,7 +37,7 @@
 | `unittest (3.9)` | **success** (v3.1, 174 test) |
 | `unittest (3.12)` | **success** (v3.1, 174 test) |
 
-Local Python 3.9.25 chạy qua `uv` ngày 2026-11-04: **174 test PASS**.
+Local Python 3.9.25 chạy qua `uv` ngày 2026-11-04: **185 test PASS**.
 Run 174 test trên CI: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41866867803>
 
 ## 3. OpenCode Adapter — kiểm chứng end-to-end
@@ -123,6 +124,16 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 - Test phát hiện mutation `deny → allow` và hash cấu hình thay đổi.
 - Cập nhật baseline phải commit config + baseline + approval note; không amend lịch sử cũ.
 
+### 3.6 Controlled write
+
+- Fixture `tests/fixtures/opencode_write/` (hash, permissions, approval policy).
+- `trinity-write` sandbox: edit `calc.py` + `test_calc.py`, test gate 2/2 PASS.
+- `run --write` without `--approve` → `WAITING_APPROVAL`; no adapter.
+- `--approve` alone does not enable write.
+- `code_write` requires `write_agent`; read-only agent is never used as fallback.
+- `rm -rf /`/`/etc/passwd` attempts in write sandbox were denied by `bash * deny`/`external_directory`; workspace unchanged.
+- Live write task: `TRN-20261104-164146-bfed3b`; approval task: `TRN-20261104-164146-ac673b`.
+
 ## 4. Task Resume
 
 Đã kiểm thử:
@@ -199,7 +210,7 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
-7. **CI 174 test**: PASS trên Python 3.9/3.12 (run 41866867803).
+7. **CI 185 test**: queued sau push; CI 174 test trước đó PASS (run 41866867803).
 
 ## 9. Cách tái lập
 

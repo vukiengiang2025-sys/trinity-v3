@@ -86,6 +86,16 @@ class CliTests(unittest.TestCase):
         self.assertIn("opencode", result.stdout)
         self.assertIn("CODING", result.stdout)
 
+    def test_write_dry_run_shows_write_plan_without_db(self):
+        result = run_cli(
+            ["--db", str(self.db), "run", "--write", "--dry-run", "sửa lỗi python"],
+            self.env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Controlled write: CÓ", result.stdout)
+        self.assertIn("code_write", result.stdout)
+        self.assertFalse(self.db.exists())
+
     def test_high_risk_requires_approval_and_persists_task(self):
         result = run_cli(
             ["--db", str(self.db), "run", "xóa toàn bộ dữ liệu production"],

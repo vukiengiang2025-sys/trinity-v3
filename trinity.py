@@ -70,6 +70,7 @@ def build_parser() -> VNParser:
             "Ví dụ:\n"
             "  python3 trinity.py status\n"
             "  python3 trinity.py run --dry-run \"sửa lỗi pytest trong core/router.py\"\n"
+            "  python3 trinity.py run --write --approve \"sửa lỗi pytest trong workspace\"\n"
             "  python3 trinity.py run --approve \"chạy lệnh git status\"\n"
             "  python3 trinity.py resume TRN-20260101-120000-abcdef --approve\n"
             "  python3 trinity.py task TRN-20260101-120000-abcdef"
@@ -91,6 +92,11 @@ def build_parser() -> VNParser:
     run.add_argument("prompt", nargs="+", help="Nội dung nhiệm vụ")
     run.add_argument("--dry-run", action="store_true", help="Chỉ lập kế hoạch, không ghi dữ liệu")
     run.add_argument("--approve", action="store_true", help="Phê duyệt rõ ràng cho tác vụ rủi ro cao")
+    run.add_argument(
+        "--write",
+        action="store_true",
+        help="Bật controlled-write agent; bắt buộc đi kèm --approve",
+    )
     run.add_argument("--timeout", type=_positive_int, default=None, help="Timeout mỗi adapter (giây)")
 
     resume = sub.add_parser("resume", parents=[common], help="Tiếp tục task WAITING_APPROVAL bằng Task ID cũ")
@@ -377,6 +383,7 @@ def cmd_run(args: argparse.Namespace, config: AppConfig) -> int:
         dry_run=bool(args.dry_run),
         approve=bool(args.approve),
         timeout=args.timeout,
+        write=bool(args.write),
     )
     _print_route(outcome)
     if outcome.resource and outcome.resource.warnings:
@@ -441,6 +448,7 @@ def _print_route(outcome: ExecutionOutcome) -> None:
     print(f"Adapter chính : {route.selected_adapter}")
     print(f"Mức rủi ro    : {route.risk_level}")
     print(f"Phê duyệt     : {'CÓ' if route.approval_required else 'không'}")
+    print(f"Controlled write: {'CÓ' if route.write_mode else 'không'}")
     if route.matched_rules:
         print(f"Rule khớp     : {'; '.join(route.matched_rules)}")
     print("Các bước (tuần tự):")

@@ -44,6 +44,17 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(len(route.execution_plan), 1)
         self.assertEqual(route.execution_plan[0]["adapter"], "opencode")
 
+    def test_write_route_is_high_risk_and_uses_write_action(self):
+        route = self.router.route("sửa lỗi python trong module", write=True)
+        self.assertEqual(route.task_type, "CODING")
+        self.assertTrue(route.write_mode)
+        self.assertEqual(route.risk_level, "high")
+        self.assertEqual(route.execution_plan[0]["action"], "code_write")
+
+    def test_write_requires_coding_task(self):
+        with self.assertRaises(RouterError):
+            self.router.route("xin chào", write=True)
+
     def test_negated_shell_is_not_automation(self):
         route = self.router.route(
             "Đọc sample.py và tóm tắt hàm chính. Không sửa file, không chạy shell."

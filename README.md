@@ -21,7 +21,7 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 > - Chưa xác minh agent production (`build`/`general`); mặc định vẫn fail closed nếu chưa cấu hình `agent`.
 > - HTTP API của OpenCode chỉ được health-check; endpoint thực thi có auth **chưa xác minh**, nên mặc định tắt.
 > - CI GitHub Actions: **174 test PASS** trên Python 3.9 và 3.12.
-> - **174 unittest — 0 failure**.
+> - **185 unittest — 0 failure**.
 >
 > Trinity không tuyên bố tích hợp đầy đủ ba agent khi adapter tương ứng chưa được xác minh.
 
@@ -244,9 +244,15 @@ python3 trinity.py run "xóa dữ liệu production"
 python3 trinity.py resume <task_id> --dry-run
 python3 trinity.py resume <task_id> --approve
 
+# Controlled write: BẮT BUỘC cả --write và --approve
+python3 trinity.py run --write --approve "sửa lỗi python trong workspace"
+
 # Giới hạn thời gian mỗi adapter
 python3 trinity.py run --timeout 120 "phân tích module python"
 ```
+
+`--write` một mình chỉ tạo `WAITING_APPROVAL`; `--approve` một mình không bật
+write. Chi tiết: `docs/OPENCODE_WRITE.md`.
 
 `run --approve` vẫn tồn tại cho tác vụ mới, nhưng luồng khuyến nghị là `resume` để giữ nguyên Task ID, plan, và ghi nhận phạm vi phê duyệt.
 
@@ -374,7 +380,8 @@ Vì chưa xác minh OpenClaw, `run "chạy lệnh ..."` sẽ dừng ở `FAILED`
 
 | Adapter | Build host | Điều kiện AVAILABLE | Thực thi thật đã test |
 |---|---|---|---|
-| OpenCode | AVAILABLE v2.2.5 | CLI `--version` + `run --help`; execution cần `agent` cấu hình rõ | **Đã test read-only thật** với `trinity-readonly`; agent production chưa xác minh |
+| OpenCode read-only | AVAILABLE v2.2.5 | CLI + agent `trinity-readonly` | **LIVE VERIFIED** |
+| OpenCode write | AVAILABLE (sandbox) | `write_agent: trinity-write` + `--write --approve` | **LIVE VERIFIED trong sandbox**, chưa production |
 | Hermes | UNAVAILABLE | CLI + command template memory đã cấu hình | Không |
 | OpenClaw | UNAVAILABLE | CLI + `invoke_prefix` + allowlist | Không |
 
@@ -407,7 +414,7 @@ Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên tr
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Kết quả lần chạy gần nhất: **174 test, 0 failure, 0 error** trên Python 3.9.25 và 3.12. CI v3.1 (174 test) pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
+Kết quả lần chạy gần nhất: **185 test, 0 failure, 0 error** trên Python 3.9.25 và 3.12. CI v3.1 (174 test) pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
 
 Các nhóm đã kiểm tra:
 
@@ -418,6 +425,7 @@ Các nhóm đã kiểm tra:
 - **Task Resume**: giữ Task ID, plan, approval scope, atomic claim, chống chạy trùng, profile/workspace mismatch, adapter/resource/lock blocked.
 - Adapter: thiếu executable, timeout, fake CLI, JSON output, permission error, OpenClaw allowlist/approval, Hermes không tạo memory dir, OpenCode default-agent fail closed, `--standalone` và chặn `--auto`.
 - **OpenCode real read-only**: agent `trinity-readonly`, edit/bash/network/external deny, task completed, workspace/Git unchanged.
+- **Controlled write**: `trinity-write` sandbox, edit + test gate 2/2 PASS, `--write --approve`, fixture hash/permissions.
 - CLI: version/status/config/tasks/task/run/resume dry-run, profile, không ghi DB/audit khi dry-run.
 - Executor: tuần tự, dừng khi lỗi, approval, resource/lock failure, redaction.
 - Process: `PWD` đồng bộ `cwd`, timeout kill process group, output + env-secret redaction.
@@ -498,3 +506,4 @@ Tài liệu chi tiết:
 - [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)
 - [`docs/TERMUX_COMPATIBILITY.md`](docs/TERMUX_COMPATIBILITY.md)
 - [`docs/OPENCODE_SANDBOX.md`](docs/OPENCODE_SANDBOX.md)
+- [`docs/OPENCODE_WRITE.md`](docs/OPENCODE_WRITE.md)

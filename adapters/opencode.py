@@ -80,6 +80,7 @@ class OpenCodeAdapter(BaseAdapter):
 
         require_explicit = bool(settings.get("require_explicit_agent", True))
         configured_agent = settings.get("agent")
+        write_agent = settings.get("write_agent")
         if cli_verified and mode in ("cli", "auto"):
             status = AdapterStatus.AVAILABLE
             policy = (
@@ -87,6 +88,10 @@ class OpenCodeAdapter(BaseAdapter):
                 if require_explicit and not configured_agent
                 else f"agent={configured_agent or 'OpenCode default'}"
             )
+            if write_agent:
+                policy += f"; write_agent={write_agent}"
+            else:
+                policy += "; write_agent chưa cấu hình"
             detail = f"CLI đã xác minh (mode={mode}); {policy}"
         elif cli_verified and mode == "http":
             # Health checks are not execution endpoints; never claim HTTP is ready.
@@ -108,11 +113,19 @@ class OpenCodeAdapter(BaseAdapter):
         )
         return self._health
 
-    def execution_ready(self):
+    def execution_ready(self, action: str = ""):
         health = self.discover(force=True)
         if health.status != AdapterStatus.AVAILABLE:
             return False, health.detail or "OpenCode không khả dụng"
         settings = self.settings()
+        if action == "code_write":
+            if not settings.get("write_agent"):
+                return (
+                    False,
+                    "chưa cấu hình adapters.opencode.write_agent; "
+                    "controlled write bị từ chối",
+                )
+            return True, ""
         if bool(settings.get("require_explicit_agent", True)) and not settings.get("agent"):
             return (
                 False,
@@ -142,7 +155,7 @@ class OpenCodeAdapter(BaseAdapter):
                 started_at=started,
             )
 
-        if request.action not in ("code_task", "general_task"):
+        if request.action not in ("code_task", "general_task", "code_write"):
             return AdapterResult(
                 adapter=self.name,
                 status=ResultStatus.UNVERIFIED,
@@ -173,7 +186,20 @@ class OpenCodeAdapter(BaseAdapter):
                 started_at=started,
             )
 
-        agent = settings.get("agent")
+        if request.action == "code_write":
+            agent = settings.get("write_agent")
+            if not agent and not request.dry_run:
+                return AdapterResult(
+                    adapter=self.name,
+                    status=ResultStatus.DENIED,
+                    error=(
+                        "chưa cấu hình adapters.opencode.write_agent; "
+                        "controlled write bị từ chối"
+                    ),
+                    started_at=started,
+                )
+        else:
+            agent = settings.get("agent")
         require_explicit = bool(settings.get("require_explicit_agent", True))
         if require_explicit and not agent and not request.dry_run:
             return AdapterResult(

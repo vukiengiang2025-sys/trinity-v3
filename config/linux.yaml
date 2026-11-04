@@ -67,6 +67,8 @@ adapters:
     # Bắt buộc chọn agent đã kiểm tra permission trước khi execute.
     # null + require_explicit_agent: true => fail closed, chỉ dry-run được.
     agent: null
+    # Chỉ đặt sau khi review quyền; dùng với run --write --approve.
+    write_agent: null
     require_explicit_agent: true
 
   hermes:
