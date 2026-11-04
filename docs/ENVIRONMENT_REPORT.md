@@ -64,23 +64,23 @@ Quyết định: adapter dùng CLI subprocess (`mode: cli`), không dùng HTTP e
 
 | Mục | Giá trị | Trạng thái |
 |---|---|---|
-| `command -v hermes` | Không tìm thấy | UNAVAILABLE |
+| Hermes isolated | `/tmp/trinity-hermes-venv`, v0.19.0 | INSTALLED_BUT_UNVERIFIED |
 | `~/.hermes` | Không tồn tại | Không có memory path đã xác minh |
-| CLI/profile | Không xác minh được | UNAVAILABLE |
+| CLI/profile | `hermes --version`/`--help`, memory/skills offline | PASS |
 | Memory path | Không mặc định `~/.hermes/memories/` | Chưa xác định |
 
-Adapter trả `UNAVAILABLE`; không tạo, không ghi đè memory directory. Command template memory để trống cho đến khi operator xác minh CLI thật.
+Adapter discovery trả `INSTALLED_BUT_UNVERIFIED`; live reasoning chưa chạy vì model local 0.5B timeout. Không tạo/ghi đè memory home thật; dùng HERMES_HOME tạm.
 
 ## 6. OpenClaw — MUSCLE
 
 | Mục | Giá trị | Trạng thái |
 |---|---|---|
-| `command -v openclaw` | Không tìm thấy | UNAVAILABLE |
+| OpenClaw isolated | `/tmp/trinity-openclaw`, v2026.10.10 | INSTALLED_BUT_UNVERIFIED |
 | `~/.cache/openclaw` | Tồn tại nhưng rỗng | Không có cài đặt đã xác minh |
-| Gateway | Không khởi động, không probe vì `gateway_enabled: false` | UNAVAILABLE |
-| CLI/version/help | Không xác minh được | UNAVAILABLE |
+| Gateway | Không khởi động/không auth | NOT VERIFIED |
+| CLI/version/help | `openclaw --version`/`--help` | PASS |
 
-Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp quyền hệ thống, không tự sinh shell command.
+Adapter discovery trả `INSTALLED_BUT_UNVERIFIED`; `agent exec` live với local model bị kill/timeout. Không tự khởi động gateway/channel.
 
 ## 7. Kết quả kiểm thử môi trường
 
@@ -91,7 +91,7 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 | `python3 trinity.py config` | PASS — profile linux, không secrets |
 | `python3 trinity.py --profile termux config` | PASS — profile termux, ngưỡng RAM 192 MB |
 | `python3 trinity.py status` | PASS — hiển thị 3 adapter |
-| `python3 trinity.py doctor` | PASS — 0 FAIL, 3 WARN (Hermes/OpenClaw unavailable; OpenCode chưa cấu hình agent) |
+| `python3 trinity.py doctor` | PASS — 0 FAIL, 3 WARN (Hermes/OpenClaw installed-but-unverified; OpenCode chưa cấu hình agent) |
 | `python3 trinity.py run --dry-run "..."` | PASS — không tạo DB/audit |
 | Unit/integration tests v3.1 | PASS — 187 test, 0 failure, 0 error |
 | GitHub Actions | PASS — Python 3.9 và 3.12 (v3.0 và v3.1) |
@@ -105,12 +105,11 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 
 **INSTALLED_BUT_UNVERIFIED**
 
-- Không có mục nào thuộc nhóm này tại thời điểm build. OpenCode HTTP health sống nhưng endpoint thực thi không được xếp vào AVAILABLE.
+- Hermes CLI v0.19.0 (isolated); live model timeout.
+- OpenClaw CLI v2026.10.10 (isolated); gateway/live agent chưa xác minh.
 
 **UNAVAILABLE**
 
-- Hermes CLI, Hermes memory path.
-- OpenClaw CLI, OpenClaw gateway.
 - Termux runtime (host hiện tại là Linux Mint).
 - GitHub CLI (`gh`) — không cần cho build vì dùng API/credential helper.
 
@@ -131,7 +130,7 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 
 ## 10. Giới hạn của báo cáo
 
-- Không kiểm chứng được hành vi thực tế của Hermes/OpenClaw vì công cụ không tồn tại trên máy.
+- Hermes/OpenClaw đã cài isolated và CLI discovered; live reasoning/gateway chưa xác minh (model 0.5B timeout/agent exec bị kill).
 - Chỉ chạy prompt thật trong sandbox `/tmp` với agent `trinity-readonly`; không chạy agent production. Kết quả chi tiết: `docs/OPENCODE_SANDBOX.md`.
 - Health endpoint 200 không chứng minh endpoint thực thi tương thích hoặc đã được cấp quyền.
 - Môi trường Termux không có sẵn để kiểm thử trên thiết bị thật; profile Termux được kiểm thử ở mức cấu hình/logic.

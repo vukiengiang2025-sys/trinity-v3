@@ -205,8 +205,8 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 ## 8. Những gì CHƯA kiểm chứng
 
 1. **Agent production OpenCode (`build`/`general`)**: chưa chạy; quyền rộng hơn agent test.
-2. **Hermes**: UNAVAILABLE; chưa kiểm chứng memory thật.
-3. **OpenClaw**: UNAVAILABLE; chưa kiểm chứng exec/gateway thật.
+2. **Hermes**: INSTALLED_BUT_UNVERIFIED (isolated); memory/skills offline PASS; live model timeout.
+3. **OpenClaw**: INSTALLED_BUT_UNVERIFIED (isolated); CLI PASS; agent exec/gateway live chưa xác minh.
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.

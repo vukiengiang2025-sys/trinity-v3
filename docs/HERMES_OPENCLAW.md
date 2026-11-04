@@ -4,74 +4,88 @@
 
 | Mục | Trạng thái |
 |---|---|
-| Package metadata | `hermes-agent` 0.19.0 (PyPI) available |
-| Installed | **NO** |
-| CLI discovery | UNAVAILABLE |
-| Memory path | Chưa xác định; không mặc định `~/.hermes/memories` |
-| Adapter | CODE VERIFIED + MOCK VERIFIED |
-| Live integration | **NOT VERIFIED** |
+| Installed isolated | **YES** — `/tmp/trinity-hermes-venv` |
+| Version | `hermes-agent 0.19.0` |
+| HERMES_HOME | `/tmp/trinity-hermes-home` (không dùng home thật) |
+| CLI discovery | **PASS** — `hermes --version`, `--help` |
+| Memory/skills offline | **PASS** — `hermes memory status`, `hermes skills list` |
+| Memory path | Built-in `MEMORY.md`/`USER.md` trong HERMES_HOME; không đọc home thật |
+| Adapter discovery | `INSTALLED_BUT_UNVERIFIED` |
+| Live reasoning | **NOT VERIFIED** — local Qwen 0.5B one-shot bị timeout |
 
-Không cài theo quy tắc an toàn hiện tại (`Không tự cài Hermes/OpenClaw`).
-Không có API key/model configuration được cung cấp. Không đọc/ghi memory của
-người dùng.
+Đã thử live:
 
-Khi operator cài và xác minh CLI, cấu hình Trinity:
+```text
+hermes -z "Say HERMES_OK" --provider openai-api --model local ...
+```
+
+với OpenAI-compatible local llama.cpp server. Kết quả: timeout 150s ở toolset
+`memory`; không có output hợp lệ. Không dùng API trả phí, không dùng key người dùng.
+
+Khi operator có model đủ mạnh (hoặc API key hợp lệ), cấu hình:
 
 ```yaml
 adapters:
   hermes:
     binary: hermes
     timeout_seconds: 300
-    memory_path: null              # chỉ đặt sau khi xác minh
-    memory_search_command: []      # ví dụ ["hermes", "memory", "search", "{query}"]
-    memory_store_command: []       # ví dụ ["hermes", "memory", "store", "{prompt}"]
+    memory_path: null
+    memory_search_command: []
+    memory_store_command: []
 ```
-
-Chỉ khi `hermes --version` và `hermes --help` xác nhận memory/skill thì adapter
-mới chuyển `AVAILABLE` và chỉ chạy command template đã cấu hình.
 
 ## 2. OpenClaw — MUSCLE
 
 | Mục | Trạng thái |
 |---|---|
-| Package metadata | `openclaw` 2026.10.10 (npm), multi-channel AI gateway |
-| Installed | **NO** |
-| Gateway | Không chạy/không cấp quyền |
-| Adapter | CODE VERIFIED + MOCK VERIFIED |
-| Live integration | **NOT VERIFIED** |
+| Installed isolated | **YES** — `/tmp/trinity-openclaw` |
+| Version | `openclaw 2026.10.10` |
+| CLI discovery | **PASS** — `openclaw --version`, `--help` |
+| Agent command | `openclaw agent exec --isolated ...` available |
+| Gateway | **NOT running / no auth** |
+| Adapter discovery | `INSTALLED_BUT_UNVERIFIED` |
+| Live reasoning | **NOT VERIFIED** — `agent exec` bị kill/timeout với local model |
 
-Không cài, không khởi động gateway, không cấu hình channel/credential. OpenClaw
-là gateway đa kênh, cần auth; health check không chứng minh khả năng thực thi.
+Đã thử:
 
-Khi operator cài và xác minh CLI/gateway, cấu hình:
+```text
+openclaw agent exec --isolated --state-dir ... \
+  --cwd ... --model openai/local --auth-env-only \
+  --json "Reply with exactly: OPENCLAW_OK"
+```
+
+Kết quả: exit 137 (bị kill) / không có output. Không tự cấu hình gateway hay
+channel; không dùng credential người dùng.
+
+Khi operator có model/gateway phù hợp:
 
 ```yaml
 adapters:
   openclaw:
     binary: openclaw
-    timeout_seconds: 300
-    gateway_enabled: false          # chỉ bật khi có auth/health đã xác minh
+    gateway_enabled: true
     gateway_url: "http://127.0.0.1:18789"
-    invoke_prefix: []               # ví dụ ["openclaw", "exec"], phải xác minh
-    command_allowlist:
-      - git
-      - ls
-      - pwd
-      - cat
-      - grep
-      - find
+    invoke_prefix: ["openclaw", "agent", "exec", "--isolated"]
+    command_allowlist: []
 ```
 
-Adapter chỉ chạy argv tường minh qua Guard + allowlist; không tự sinh command
-từ prompt, không dùng shell=True.
+## 3. Trạng thái tổng hợp
 
-## 3. Gate để chuyển LIVE VERIFIED
+| Mức | Hermes | OpenClaw |
+|---|---|---|
+| DISCOVERED | ✅ | ✅ |
+| AVAILABLE (CLI) | ✅ | ✅ |
+| CONNECTED (live model/gateway) | ❌ | ❌ |
+| INTEGRATED (adapter live) | ❌ | ❌ |
+| VERIFIED | ❌ | ❌ |
+| PRODUCTION_READY | ❌ | ❌ |
 
-- Cài trong môi trường cô lập (không đè bản có sẵn).
-- Xác minh version/help/health bằng lệnh thật.
-- Dùng workspace giả, không dữ liệu người dùng.
-- Chạy một request đọc/vô hại, kiểm tra output, timeout, process cleanup.
-- Kiểm tra audit, DB, workspace/Git trước-sau.
-- Chỉ sau đó mới đánh dấu adapter `LIVE VERIFIED`.
+Trinity hiện chỉ có **OpenCode read-only + controlled-write** LIVE VERIFIED.
+Ba-agent live vẫn chưa đạt; không tuyên bố P1 hoàn tất.
 
-Không tuyên bố Trinity P1 hoàn tất khi Hermes/OpenClaw chưa qua gate này.
+## 4. Cleanup / safety
+
+- Model server và Ollama tạm đã dừng sau thử nghiệm.
+- Các cài đặt nằm trong `/tmp`, không sửa global config.
+- Không dùng API key, token, tài khoản hoặc dịch vụ trả phí.
+- Không bật gateway/channel/automation.

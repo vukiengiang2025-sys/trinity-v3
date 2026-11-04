@@ -17,9 +17,9 @@
 | OpenCode controlled write | **LIVE VERIFIED (sandbox)** | `trinity-write`, diff + test gate 2/2 |
 | Approval write | **PASS** | `--write` without `--approve` → WAITING_APPROVAL |
 | Git checkpoint write | **PASS** | reject dirty/non-Git; `git_before`/`git_after` |
-| Hermes | **UNAVAILABLE / BLOCKED** | no CLI; no install per policy |
-| OpenClaw | **UNAVAILABLE / BLOCKED** | no CLI/gateway; no install per policy |
-| 3-agent live orchestration | **NOT VERIFIED** | Hermes/OpenClaw unavailable |
+| Hermes | **INSTALLED_BUT_UNVERIFIED** | isolated v0.19.0, CLI/memory/skills OK; live model timeout |
+| OpenClaw | **INSTALLED_BUT_UNVERIFIED** | isolated v2026.10.10, CLI OK; agent exec killed/timeout |
+| 3-agent live orchestration | **NOT VERIFIED** | Hermes/OpenClaw installed but live model/gateway unverified |
 | Termux | **OUT OF SCOPE** | explicitly excluded |
 
 ## 2. Controlled write — bằng chứng thật
@@ -61,30 +61,33 @@ python3 trinity.py run --write --approve "sửa lỗi python trong workspace"
 
 ## 4. Hermes — BRAIN
 
-- PyPI metadata: `hermes-agent 0.19.0`.
-- Không cài theo nguyên tắc an toàn của phiên này.
-- CLI: UNAVAILABLE.
-- Adapter: code + mock tests PASS.
-- Live: NOT VERIFIED.
+- Installed isolated: `/tmp/trinity-hermes-venv`, `hermes-agent 0.19.0`.
+- HERMES_HOME: `/tmp/trinity-hermes-home`.
+- CLI: `hermes --version`, `--help` PASS; memory/skills offline PASS.
+- Adapter: `INSTALLED_BUT_UNVERIFIED`.
+- Live reasoning: NOT VERIFIED — local Qwen 0.5B one-shot timeout.
+- Không dùng key/API trả phí của người dùng.
 
 Điều kiện hoàn tất:
 
-1. Operator cài Hermes trong môi trường cô lập.
-2. Xác minh `hermes --version`, `hermes --help`, memory/skill command thật.
+1. Operator cung cấp model/API hợp lệ cho Hermes (đã cài isolated).
+2. Xác minh memory/skill command thật với HERMES_HOME cô lập.
 3. Cấu hình `memory_path` + `memory_search_command`/`memory_store_command`.
 4. Chạy task đọc trong workspace giả; kiểm tra output/audit/không đổi memory.
 5. Chỉ khi đó đánh dấu LIVE VERIFIED.
 
 ## 5. OpenClaw — MUSCLE
 
-- npm metadata: `openclaw 2026.10.10`.
-- Không cài/không chạy gateway.
-- Adapter: code + mock tests PASS.
-- Live: NOT VERIFIED.
+- Installed isolated: `/tmp/trinity-openclaw`, `openclaw 2026.10.10`.
+- CLI: `openclaw --version`, `--help` PASS.
+- Gateway: không chạy/không auth.
+- Adapter: `INSTALLED_BUT_UNVERIFIED`.
+- Live reasoning: NOT VERIFIED — `agent exec` bị kill/timeout với local model.
+- Không tự cấu hình channel/gateway.
 
 Điều kiện hoàn tất:
 
-1. Cài trong môi trường cô lập, không đè bản có sẵn.
+1. OpenClaw đã cài isolated; cần cấu hình model/gateway/auth.
 2. Xác minh CLI/version/help và gateway auth.
 3. Cấu hình `invoke_prefix`, `gateway_enabled`, `command_allowlist`.
 4. Chạy argv vô hại, kiểm tra Guard + approval + timeout + process cleanup.
@@ -137,8 +140,8 @@ Residual:
 
 ## 10. Kết luận P1
 
-P1 **chưa hoàn tất đầy đủ** theo tiêu chí ba-agent live vì Hermes/OpenClaw chưa được
-cài và chưa live-verify.
+P1 **chưa hoàn tất đầy đủ** theo tiêu chí ba-agent live vì Hermes/OpenClaw đã cài nhưng
+chưa live-verify (model/gateway).
 
 Đã hoàn tất trong phạm vi an toàn:
 
@@ -148,4 +151,4 @@ cài và chưa live-verify.
 - Test/CI 187 PASS.
 - Tài liệu, fixture, báo cáo.
 
-Blocker còn lại: Hermes/OpenClaw installation/credentials/live integration.
+Blocker còn lại: Hermes/OpenClaw model/gateway credentials và live integration.

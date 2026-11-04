@@ -14,8 +14,8 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 
 > **Trạng thái thực tế tại môi trường build (2026-11-04, v3.1)**
 > - Linux Mint 22.3, Python 3.12.3, OpenCode v2.2.5: **đã xác minh CLI**.
-> - Hermes: **UNAVAILABLE** (không có executable).
-> - OpenClaw: **UNAVAILABLE** (không có executable/gateway).
+> - Hermes: **INSTALLED_BUT_UNVERIFIED** (isolated `/tmp/trinity-hermes-venv`, CLI OK; live model chưa chạy).
+> - OpenClaw: **INSTALLED_BUT_UNVERIFIED** (isolated `/tmp/trinity-openclaw`, CLI OK; gateway/live chưa chạy).
 > - OpenCode execution **fail closed**: phải cấu hình `adapters.opencode.agent` đã kiểm tra permission; không tự dùng agent mặc định.
 > - **Đã chạy read-only prompt thật** qua OpenCode với agent tạm `trinity-readonly` trong workspace giả: task `TRN-20261104-152925-1c79c9` COMPLETED, workspace/Git không đổi, `/etc/passwd` bị `external_directory` deny.
 > - Chưa xác minh agent production (`build`/`general`); mặc định vẫn fail closed nếu chưa cấu hình `agent`.
@@ -339,7 +339,7 @@ opencode --version
 python3 trinity.py status
 ```
 
-### 7.2 Hermes — BRAIN (UNAVAILABLE tại môi trường build)
+### 7.2 Hermes — BRAIN (INSTALLED_BUT_UNVERIFIED)
 
 - Không mặc định `~/.hermes/memories/`.
 - Chỉ dùng `memory_path` trong config hoặc biến `HERMES_MEMORY_PATH`; không tạo thư mục.
@@ -356,7 +356,7 @@ adapters:
 
 Nếu tìm thấy CLI nhưng chưa có template đã xác minh: `INSTALLED_BUT_UNVERIFIED`; không đoán cú pháp. Nếu không có CLI: `UNAVAILABLE`.
 
-### 7.3 OpenClaw — MUSCLE (UNAVAILABLE tại môi trường build)
+### 7.3 OpenClaw — MUSCLE (INSTALLED_BUT_UNVERIFIED)
 
 - Không tự khởi động gateway, không cấp quyền hệ thống rộng.
 - Chỉ thực thi argv **do caller cung cấp**, không tự sinh shell command từ văn bản.
@@ -382,8 +382,8 @@ Vì chưa xác minh OpenClaw, `run "chạy lệnh ..."` sẽ dừng ở `FAILED`
 |---|---|---|---|
 | OpenCode read-only | AVAILABLE v2.2.5 | CLI + agent `trinity-readonly` | **LIVE VERIFIED** |
 | OpenCode write | AVAILABLE (sandbox) | `write_agent: trinity-write` + `--write --approve` | **LIVE VERIFIED trong sandbox**, chưa production |
-| Hermes | UNAVAILABLE | CLI + command template memory đã cấu hình | Không |
-| OpenClaw | UNAVAILABLE | CLI + `invoke_prefix` + allowlist | Không |
+| Hermes | INSTALLED_BUT_UNVERIFIED v0.19.0 | CLI + command template memory đã cấu hình | Chưa (live model timeout) |
+| OpenClaw | INSTALLED_BUT_UNVERIFIED v2026.10.10 | CLI + `invoke_prefix` + allowlist | Chưa (agent exec bị kill/timeout) |
 
 ---
 
@@ -494,7 +494,7 @@ trinity-v3/
 
 - Không thay đổi cấu hình OpenCode global, provider, model, MCP, plugin, skills.
 - Không đọc/ghi/log/commit API key hay credential.
-- Không tự cài/gỡ/nâng cấp Hermes, OpenClaw, OpenCode.
+- Không cài Hermes/OpenClaw vào global hoặc thay thế bản có sẵn; cài isolated trong `/tmp` khi có yêu cầu.
 - Không force push, reset, clean hoặc viết lại lịch sử Git.
 - Chỉ các file thuộc repo này được commit.
 

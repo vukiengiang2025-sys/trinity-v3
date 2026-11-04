@@ -7,7 +7,7 @@
 - **HEAD code hoàn tất P0:** `2a56726`
 - **HEAD controlled write:** `ca0c088`
 - **Phạm vi:** P0 security/recovery, P1 Termux readiness, adapter status, test/CI, tài liệu.
-- **Nguyên tắc:** không mở quyền agent, không sửa global OpenCode config, không cài Hermes/OpenClaw, không force push.
+- **Nguyên tắc:** không mở quyền agent, không sửa global OpenCode config; Hermes/OpenClaw chỉ cài isolated trong `/tmp` theo yêu cầu; không force push.
 
 ## 1. Trạng thái ban đầu
 
@@ -18,8 +18,8 @@
 | CI gần nhất đã xanh | 153 test |
 | CI mới | 187 test PASS |
 | OpenCode | v2.2.5, CLI AVAILABLE |
-| Hermes | UNAVAILABLE |
-| OpenClaw | UNAVAILABLE |
+| Hermes | INSTALLED_BUT_UNVERIFIED (v0.19.0, isolated) |
+| OpenClaw | INSTALLED_BUT_UNVERIFIED (v2026.10.10, isolated) |
 | Termux | chưa chạy trên thiết bị |
 | Agent production | chưa bật; chỉ `trinity-readonly` |
 
@@ -105,8 +105,8 @@ Residual:
 
 ### 2.7 Hermes/OpenClaw
 
-- Hermes: PyPI `hermes-agent` 0.19.0 metadata available; chưa cài; UNAVAILABLE.
-- OpenClaw: npm `openclaw` 2026.10.10 metadata available; chưa cài; gateway không chạy.
+- Hermes: `hermes-agent 0.19.0` installed isolated; CLI/memory/skills offline PASS; live model timeout.
+- OpenClaw: `openclaw 2026.10.10` installed isolated; CLI PASS; `agent exec` live bị kill/timeout; gateway không chạy.
 - `CODE VERIFIED` + `MOCK VERIFIED` ở mức unit test.
 - `LIVE VERIFIED`: **không**, vì CLI/gateway không tồn tại.
 - Không tự cài theo quy tắc an toàn.
@@ -168,6 +168,6 @@ Gửi lại `logs/termux-self-test-*.txt` để đối chiếu.
 - P0 security/recovery: **PASS local**, có lease/heartbeat, baseline approval, leakage test.
 - OpenCode read-only: **LIVE VERIFIED**.
 - Termux: **BLOCKED** do thiết bị khóa/không có quyền chạy; self-test đã sẵn sàng.
-- Hermes/OpenClaw: **UNAVAILABLE**.
+- Hermes/OpenClaw: **INSTALLED_BUT_UNVERIFIED**; live model/gateway chưa xác minh.
 - CI 187: **PASS** (3.9/3.12).
 - Chưa bật `build/general`; chưa cho Trinity tự sửa repository.
