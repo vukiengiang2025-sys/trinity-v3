@@ -170,3 +170,64 @@ rm -f /tmp/trinity-opencode-adapter*.db /tmp/trinity-opencode-adapter*-logs/*
 ```
 
 Không xóa hoặc sửa `~/.config/opencode/opencode.jsonc`.
+
+## 9. Frozen regression baseline
+
+Cấu hình và kết quả đã được đóng băng trong:
+
+- `tests/fixtures/opencode_readonly/opencode.json`
+- `tests/fixtures/opencode_readonly/baseline.json`
+- `tests/test_opencode_baseline.py`
+
+Baseline ghi nhận:
+
+| Mục | Giá trị |
+|---|---|
+| OpenCode | v2.2.5 |
+| Agent | `trinity-readonly` |
+| Config SHA-256 | `519b6c3936027c0f9f3b8999ca41c2e2e85b4b0cda73275f37435fec017d6f59` |
+| Task read-only đầu tiên | `TRN-20261104-152925-1c79c9` |
+| Sandbox Git HEAD | `3d5aa908630c0eb4b828dcbb6e3b92a75cb10360` |
+| Reference commits | `b0ecdc5` (code), `bcd562b` (docs) |
+
+Test `tests/test_opencode_baseline.py` kiểm tra hash cấu hình, các rule deny bắt buộc, quyền đọc nhạy cảm, metadata baseline và sự tồn tại của durability/failure records.
+
+## 10. Durability runs
+
+Ba prompt đọc khác nhau, cùng agent read-only, cùng sandbox:
+
+| Run | Task ID | Status | Result chars |
+|---|---|---|---:|
+| Đọc README | `TRN-20261104-154042-7e4461` | COMPLETED | 3.135 |
+| Đọc sample.py | `TRN-20261104-154054-3d8a4c` | COMPLETED | 5.331 |
+| Liệt kê workspace | `TRN-20261104-154103-f1bc57` | COMPLETED | 13.811 |
+
+Sau cả ba:
+
+- `git status --short` rỗng.
+- Git HEAD vẫn `3d5aa90...`.
+- Không có file mới/thay đổi trong sandbox.
+- Không có `SHOULD_NOT_EXIST` hoặc `SHELL_SHOULD_NOT_EXIST`.
+
+## 11. Failure modes
+
+| Case | Task ID | Kết quả | Workspace/Git |
+|---|---|---|---|
+| Agent không tồn tại | `TRN-20261104-154124-357dd5` | **FAILED** — `Agent not found` | Không đổi |
+| Timeout 1 giây | `TRN-20261104-154130-9432bd` | **FAILED** — `TIMEOUT` | Không đổi |
+| JSON sai định dạng | fake CLI test | **FAILED** — `json_valid=false` | N/A |
+| JSON rỗng | fake CLI test | **FAILED** | N/A |
+| Error event nhưng exit 0 | fake CLI test | **FAILED** — `Agent not found` | N/A |
+
+Sau timeout, không còn tiến trình `opencode --standalone` treo; service UI `opencode serve --service` của người dùng vẫn chạy độc lập.
+
+## 12. Cập nhật hồi quy
+
+Bộ test hiện tại: **153 test**. Các test mới bao gồm:
+
+- `PWD`/`cwd` consistency.
+- `--standalone` và không truyền `--auto`.
+- Router negation (`không chạy shell`).
+- JSON rỗng/sai định dạng.
+- Error event với exit code 0 phải fail closed.
+- Baseline fixture hash/rules/durability/failure records.

@@ -83,8 +83,14 @@ if args and args[0] == "exec":
 if "run" in args:
     if mode == "json":
         print('{{"ok": true, "message": "agent output"}}')
+    elif mode == "invalid-json":
+        print("this is not json")
+    elif mode == "agent-missing":
+        print('{{"type": "error", "error": {{"type": "unknown", "message": "Agent not found: trinity-readonly"}}}}')
+    elif mode == "empty":
+        pass
     else:
-        print("agent output")
+        print('{{"type": "text", "text": "agent output"}}')
     sys.exit(0)
 print("fake-tool " + " ".join(args))
 sys.exit(0)

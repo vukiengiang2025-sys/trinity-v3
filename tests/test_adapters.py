@@ -114,6 +114,35 @@ class OpenCodeAdapterTests(AdapterTestBase):
         self.assertTrue(result.metadata.get("json_valid"))
         self.assertIn('"ok": true', result.stdout)
 
+    def test_invalid_json_output_fails_closed(self):
+        fake = make_fake_executable(self.root, "opencode-invalid", mode="invalid-json")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        result = adapter.execute(self.request())
+        self.assertEqual(result.status, ResultStatus.FAILED)
+        self.assertFalse(result.metadata.get("json_valid"))
+        self.assertIn("JSON", result.error)
+
+    def test_empty_json_output_fails_closed(self):
+        fake = make_fake_executable(self.root, "opencode-empty", mode="empty")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        result = adapter.execute(self.request())
+        self.assertEqual(result.status, ResultStatus.FAILED)
+        self.assertFalse(result.metadata.get("json_valid"))
+
+    def test_error_event_with_exit_zero_fails_closed(self):
+        fake = make_fake_executable(self.root, "opencode-agent-missing", mode="agent-missing")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        result = adapter.execute(self.request())
+        self.assertEqual(result.status, ResultStatus.FAILED)
+        self.assertIn("Agent not found", result.error)
+        self.assertIn("Agent not found", result.metadata.get("opencode_error", ""))
+
     def test_permission_failure_is_surfaced(self):
         fake = make_fake_executable(self.root, "opencode-permission", mode="permission")
         self.config.data["adapters"]["opencode"]["binary"] = str(fake)

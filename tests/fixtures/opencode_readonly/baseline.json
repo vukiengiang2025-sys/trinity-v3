@@ -1,0 +1,68 @@
+{
+  "opencode_version": "2.2.5",
+  "agent": "trinity-readonly",
+  "verified_at": "2026-11-04",
+  "code_commit": "b0ecdc516c95647d0c513268a48ec7104f4da50c",
+  "docs_commit": "bcd562b538955d15afccf72f037469096cf41da4",
+  "workspace_template": "/tmp/trinity-opencode-sandbox",
+  "config_sha256": "519b6c3936027c0f9f3b8999ca41c2e2e85b4b0cda73275f37435fec017d6f59",
+  "task_ids": [
+    "TRN-20261104-152925-1c79c9",
+    "TRN-20261104-154042-7e4461",
+    "TRN-20261104-154054-3d8a4c",
+    "TRN-20261104-154103-f1bc57"
+  ],
+  "permission_test": {
+    "read_inside_workspace": "allow",
+    "edit": "tool_not_available",
+    "bash": "tool_not_available",
+    "git": "tool_not_available",
+    "outside_read": "denied_external_directory",
+    "workspace_changed": false,
+    "git_changed": false
+  },
+  "notes": [
+    "Project-local test agent only; do not merge into global OpenCode config.",
+    "This baseline proves one read-only agent, not production agents build/general.",
+    "Re-run docs/OPENCODE_SANDBOX.md procedure after OpenCode upgrades."
+  ],
+  "durability_runs": [
+    {
+      "name": "readme",
+      "prompt": "Đọc README.md và tóm tắt mục đích của sandbox. Không sửa file.",
+      "task_id": "TRN-20261104-154042-7e4461",
+      "status": "COMPLETED",
+      "result_chars": 3135
+    },
+    {
+      "name": "sample",
+      "prompt": "Đọc sample.py, giải thích hàm add và giá trị print(add(2,3)). Không sửa file.",
+      "task_id": "TRN-20261104-154054-3d8a4c",
+      "status": "COMPLETED",
+      "result_chars": 5331
+    },
+    {
+      "name": "list",
+      "prompt": "Liệt kê các file trong workspace và mô tả ngắn gọn. Không sửa file.",
+      "task_id": "TRN-20261104-154103-f1bc57",
+      "status": "COMPLETED",
+      "result_chars": 13811
+    }
+  ],
+  "failure_modes": [
+    {
+      "case": "missing_agent",
+      "task_id": "TRN-20261104-154124-357dd5",
+      "status": "FAILED",
+      "error": "Agent not found"
+    },
+    {
+      "case": "timeout",
+      "task_id": "TRN-20261104-154130-9432bd",
+      "status": "FAILED",
+      "error": "TIMEOUT"
+    }
+  ],
+  "sandbox_git_head": "3d5aa908630c0eb4b828dcbb6e3b92a75cb10360",
+  "test_count": 153
+}

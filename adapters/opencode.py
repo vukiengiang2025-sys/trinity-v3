@@ -255,34 +255,65 @@ class OpenCodeAdapter(BaseAdapter):
         }
         result = self._result_from_process(self.name, process, started_at=started, metadata=metadata)
         if output_format == "json":
-            result.metadata["json_valid"] = self._json_valid(result.stdout)
+            events, parse_error = self._parse_json_events(result.stdout)
+            result.metadata["json_valid"] = parse_error == ""
+            if result.status == ResultStatus.SUCCESS and parse_error:
+                result.status = ResultStatus.FAILED
+                result.error = truncate(f"OpenCode JSON output không hợp lệ: {parse_error}", 2000)
+            elif events:
+                error_event = next(
+                    (event for event in events if isinstance(event, dict) and event.get("type") == "error"),
+                    None,
+                )
+                if error_event is not None:
+                    message = self._event_error_message(error_event)
+                    result.metadata["opencode_error"] = truncate(message, 500)
+                    if result.status == ResultStatus.SUCCESS:
+                        result.status = ResultStatus.FAILED
+                        result.error = truncate(f"OpenCode error: {message}", 2000)
+                    lowered = message.lower()
+                    if any(token in lowered for token in ("permission", "approval", "approve", "not allowed", "external_directory")):
+                        result.metadata["permission_required"] = True
         if result.status != ResultStatus.SUCCESS:
             combined = f"{result.stdout}\n{result.stderr}".lower()
-            if any(token in combined for token in ("permission", "approval", "approve", "not allowed")):
+            if any(token in combined for token in ("permission", "approval", "approve", "not allowed", "external_directory")):
                 result.metadata["permission_required"] = True
-                result.error = truncate(
-                    "OpenCode yêu cầu phê duyệt; Trinity không dùng --auto. "
-                    + (result.error or "kiểm tra permission của agent OpenCode"),
-                    2000,
-                )
+                if "phê duyệt" not in (result.error or "").lower():
+                    result.error = truncate(
+                        "OpenCode yêu cầu phê duyệt; Trinity không dùng --auto. "
+                        + (result.error or "kiểm tra permission của agent OpenCode"),
+                        2000,
+                    )
         return result
 
     @staticmethod
-    def _json_valid(text: str) -> bool:
+    def _parse_json_events(text: str):
         payload = (text or "").strip()
         if not payload:
-            return False
+            return [], "rỗng"
         try:
-            json.loads(payload)
-            return True
+            parsed = json.loads(payload)
+            if isinstance(parsed, list):
+                return parsed, ""
+            return [parsed], ""
         except (TypeError, json.JSONDecodeError):
             pass
-        lines = [line for line in payload.splitlines() if line.strip()]
-        if not lines:
-            return False
-        try:
-            for line in lines:
-                json.loads(line)
-            return True
-        except (TypeError, json.JSONDecodeError):
-            return False
+        events = []
+        for line_no, line in enumerate(payload.splitlines(), start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                return [], f"dòng {line_no}: {exc.msg}"
+        if not events:
+            return [], "không có JSON event"
+        return events, ""
+
+    @staticmethod
+    def _event_error_message(event: dict) -> str:
+        error = event.get("error")
+        if isinstance(error, dict):
+            return str(error.get("message") or error.get("type") or "OpenCode error")
+        return str(event.get("message") or error or "OpenCode error")

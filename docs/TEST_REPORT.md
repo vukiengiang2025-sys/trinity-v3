@@ -3,10 +3,10 @@
 - **Ngày:** 2026-11-04
 - **Môi trường:** Linux Mint 22.3, Python 3.12.3, OpenCode v2.2.5
 - **Lệnh:** `python3 -m unittest discover -s tests -t . -v`
-- **Kết quả:** **143 test — 0 failure — 0 error — OK**
+- **Kết quả:** **153 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
-- **Sau v3.1:** 143 test (+28)
-- **CI:** v3.1 (143 test) PASS trên Python 3.9/3.12
+- **Sau v3.1:** 153 test (+38)
+- **CI:** v3.1 (143 test) PASS trên Python 3.9/3.12; bộ 153 test chờ chạy sau push
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -18,12 +18,13 @@
 | `test_guard.py` | 20 | Path, symlink, file nhạy cảm, command allowlist, Git safety, injection |
 | `test_resource.py` | 11 | RAM đọc được/không đọc được, sysconf fallback, RAM/disk thấp, lock, timeout |
 | `test_task.py` | 12 | Task lifecycle, transition, event, permission, missing DB, redaction, audit |
-| `test_adapters.py` | 23 | Missing tool, fake CLI, timeout, JSON, permission, OpenClaw/Hermes, default-agent deny, standalone |
+| `test_adapters.py` | 26 | Missing tool, fake CLI, timeout, JSON empty/invalid/error event, permission, OpenClaw/Hermes, default-agent deny, standalone |
+| `test_opencode_baseline.py` | 7 | Frozen config hash, deny rules, durability records, failure modes, no secrets |
 | `test_executor.py` | 12 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
 | `test_resume.py` | 16 | Resume cùng Task ID, approval record, atomic claim, mismatch, migration, lock fail-closed |
 | `test_cli.py` | 17 | version/status/config/tasks/task/run/resume, dry-run, exit code |
 | `test_utils.py` | 10 | Redaction, truncate, mask mapping, subprocess timeout, PWD/cwd consistency |
-| **Tổng** | **143** | |
+| **Tổng** | **153** | |
 
 ## 2. CI
 
@@ -74,6 +75,34 @@ Cấu hình Executor tạm trỏ workspace sandbox, `agent=trinity-readonly`, `s
 - **`PWD` không đồng bộ `cwd`** → OpenCode đọc nhầm project config, báo `Agent not found`. Sửa trong `run_process` + test.
 - **Service OpenCode UI dùng chung** → thêm `standalone: true` mặc định để mỗi run dùng server riêng.
 - **Router coi “không chạy shell” là AUTOMATION** → thêm negation-aware routing + test.
+
+### 3.3 Frozen baseline và durability
+
+Fixture hồi quy:
+
+- `tests/fixtures/opencode_readonly/opencode.json`
+- `tests/fixtures/opencode_readonly/baseline.json`
+- `tests/test_opencode_baseline.py`
+
+Baseline: OpenCode v2.2.5, agent `trinity-readonly`, config SHA-256
+`519b6c3936027c0f9f3b8999ca41c2e2e85b4b0cda73275f37435fec017d6f59`.
+
+Ba run thật:
+
+| Run | Task ID | Status | Result chars |
+|---|---|---|---:|
+| README | `TRN-20261104-154042-7e4461` | COMPLETED | 3.135 |
+| sample.py | `TRN-20261104-154054-3d8a4c` | COMPLETED | 5.331 |
+| list workspace | `TRN-20261104-154103-f1bc57` | COMPLETED | 13.811 |
+
+Failure modes thật:
+
+| Case | Task ID | Kết quả |
+|---|---|---|
+| Agent không tồn tại | `TRN-20261104-154124-357dd5` | FAILED — Agent not found |
+| Timeout 1s | `TRN-20261104-154130-9432bd` | FAILED — TIMEOUT |
+
+Sau tất cả: workspace/Git sandbox không đổi; không còn standalone server treo.
 
 ## 4. Task Resume
 
@@ -141,7 +170,7 @@ Cấu hình Executor tạm trỏ workspace sandbox, `agent=trinity-readonly`, `s
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
-7. **CI 143 test**: PASS trên Python 3.9/3.12 (run 41859350633).
+7. **CI 153 test**: chờ chạy sau push; CI 143 test trước đó PASS.
 
 ## 9. Cách tái lập
 

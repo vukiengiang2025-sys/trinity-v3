@@ -184,6 +184,9 @@ Xem `docs/TEST_REPORT.md`. Các test bao gồm:
 - Adapter thiếu tool → UNAVAILABLE; OpenClaw thiếu guard/approval → DENIED.
 - OpenCode thiếu agent tường minh → DENIED; permission error được đánh dấu.
 - OpenCode read-only thật: read trong workspace được phép; edit/bash bị ẩn; `/etc/passwd` bị `external_directory` deny; workspace/Git không đổi.
+- Durability 3 run thật COMPLETED; agent không tồn tại/timeout FAILED; không còn standalone server treo.
+- Frozen baseline config hash + rules: `tests/fixtures/opencode_readonly/`.
+- JSON rỗng/sai định dạng/error event exit 0 đều FAILED (fail closed).
 - `PWD` đồng bộ `cwd`; `--standalone`; router negation.
 - Resume cùng Task ID, lưu approval scope, atomic claim, chống chạy trùng.
 - Resume sai profile/workspace/plan bị từ chối.

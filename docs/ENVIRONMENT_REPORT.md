@@ -92,7 +92,7 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 | `python3 trinity.py status` | PASS — hiển thị 3 adapter |
 | `python3 trinity.py doctor` | PASS — 0 FAIL, 3 WARN (Hermes/OpenClaw unavailable; OpenCode chưa cấu hình agent) |
 | `python3 trinity.py run --dry-run "..."` | PASS — không tạo DB/audit |
-| Unit/integration tests v3.1 | PASS — 143 test, 0 failure, 0 error |
+| Unit/integration tests v3.1 | PASS — 153 test, 0 failure, 0 error |
 | GitHub Actions | PASS — Python 3.9 và 3.12 (v3.0 và v3.1) |
 
 ## 8. Phân loại tổng hợp
@@ -115,12 +115,14 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 
 ## 9. Cập nhật kiểm định v3.1
 
-- CI v3.1: **success** cho cả `unittest (3.9)` và `unittest (3.12)` với 143 test (run 41859350633).
-- Bộ test v3.1: **143 test**, 0 failure, 0 error.
+- CI v3.1: **success** cho cả `unittest (3.9)` và `unittest (3.12)` với 143 test (run 41859350633); bộ 153 test chạy lại sau push.
+- Bộ test v3.1: **153 test**, 0 failure, 0 error.
 - Lock `fcntl`: phát hiện khả năng fail-open; đã sửa thành **fail closed** khi thiếu fcntl/non-POSIX/filesystem không hỗ trợ.
 - Task resume: đã triển khai cùng Task ID, plan JSON, approval actor/time/scope, atomic claim.
 - OpenCode: mặc định không dùng agent built-in; thiếu `agent` cấu hình → `DENIED`.
 - OpenCode read-only thật: agent `trinity-readonly` (edit/bash/network/external deny); task COMPLETED; `/etc/passwd` bị deny; workspace/Git không đổi. Xem `docs/OPENCODE_SANDBOX.md`.
+- Durability: 3/3 read-only run thật COMPLETED; agent không tồn tại và timeout 1s đều FAILED, workspace/Git không đổi.
+- Frozen regression baseline: `tests/fixtures/opencode_readonly/` + hash/config rules.
 - Phát hiện và sửa `PWD` không đồng bộ `cwd`; thêm `standalone: true` để tránh service/cache UI.
 - Termux: mới kiểm thử mô phỏng, chưa chạy trên Redmi 15 5G.
 
