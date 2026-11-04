@@ -143,6 +143,22 @@ class ExecutorTests(unittest.TestCase):
         self.assertEqual(outcome.status, "FAILED")
         self.assertIn("adapter lỗi", outcome.message)
 
+    def test_adapter_exception_secret_is_redacted(self):
+        fake_token = "ghp_" + ("x" * 36)
+
+        class RaisingAdapter(FakeAdapter):
+            def execute(self, request):
+                raise RuntimeError(f"password=hunter2 token={fake_token}")
+
+        executor = self.executor({"opencode": RaisingAdapter("opencode")})
+        outcome = executor.execute("sửa lỗi python")
+        self.assertEqual(outcome.status, "FAILED")
+        task = TaskManager(self.config.db_path).get_task(outcome.task_id)
+        serialized = (task.get("error", "") + task.get("result", ""))
+        self.assertNotIn("hunter2", serialized)
+        self.assertNotIn(fake_token, serialized)
+        self.assertIn("REDACTED", serialized)
+
     def test_result_secrets_are_redacted(self):
         fake_token = "ghp_" + ("e" * 36)
         adapter = FakeAdapter(

@@ -294,6 +294,28 @@ class TaskManager:
     def cancel_task(self, task_id: str) -> Dict[str, Any]:
         return self.update_status(task_id, CANCELLED, error="người dùng hủy tác vụ")
 
+    def fail_running_tasks(self, reason: str) -> int:
+        """Mark orphaned RUNNING tasks as FAILED after a restart.
+
+        The caller must hold the single-task lock; this method intentionally
+        does not acquire it so recovery and execution use one policy point.
+        """
+
+        conn = self._connect(create=False)
+        if conn is None:
+            return 0
+        try:
+            rows = conn.execute("SELECT id FROM tasks WHERE status = ?", (RUNNING,)).fetchall()
+        except sqlite3.OperationalError:
+            return 0
+        count = 0
+        for row in rows:
+            task_id = row["id"]
+            self.update_status(task_id, FAILED, error=reason)
+            self.add_event(task_id, "recovered", reason)
+            count += 1
+        return count
+
     def claim_for_resume(self, task_id: str, approver: str, scope: str) -> Dict[str, Any]:
         """Atomically claim a WAITING_APPROVAL task for exactly one runner.
 

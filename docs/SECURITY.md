@@ -80,6 +80,7 @@ Chặn vĩnh viễn:
 - `resume` dùng Task ID cũ; không tạo task trùng. `claim_for_resume` là UPDATE có điều kiện `WHERE status='WAITING_APPROVAL'`, lưu `approved_by`, `approved_at`, `approval_scope` (hash plan), `resume_count`.
 - Resume re-check profile, workspace đã lưu, Guard, Resource và adapter availability. Nếu chưa đủ điều kiện, task vẫn `WAITING_APPROVAL`.
 - Task v3.0 thiếu `plan_json`/`workspace` bị từ chối resume thay vì đoán.
+- Baseline read-only có approval policy: `tests/fixtures/opencode_readonly/APPROVAL.md`; test phát hiện hash change và `deny → allow` mutation. Cập nhật baseline phải có review + approval metadata + commit mới.
 
 ### 3.5 Tài nguyên
 
@@ -88,6 +89,8 @@ Chặn vĩnh viễn:
 - Ngưỡng riêng Linux/Termux.
 - Một lock `fcntl` duy nhất; không chạy đồng thời.
 - **Fail closed**: nếu `fcntl` thiếu, không phải POSIX, hoặc filesystem không hỗ trợ flock (shared storage Android), Trinity từ chối chạy. Không fallback sang chạy không khóa.
+- Khi khởi động lại, task `RUNNING` bị bỏ lại chỉ được đánh dấu `FAILED` nếu lock có thể acquire; lock đang bận thì không đụng task. Không đánh dấu `COMPLETED` khi chưa có kết quả adapter.
+- `PR_SET_PDEATHSIG` best-effort kill direct child khi Trinity chết; không bảo vệ được detached grandchildren.
 - Timeout bị clamp theo profile; process tree bị kill khi quá hạn.
 - Output giới hạn để tránh flood bộ nhớ/DB.
 
@@ -96,6 +99,8 @@ Chặn vĩnh viễn:
 - Không đọc file `.env`, credential, provider config.
 - Không đọc/ghi API key của OpenCode.
 - `redact()` xử lý: `password=`, `token=`, `api_key:`, `Bearer`, `sk-`, `ghp_`, `github_pat_`, `AKIA`, private key block, URL có user:pass.
+- `redact_env_values()` che giá trị của biến môi trường có tên nhạy cảm (`*_SECRET`, `*_TOKEN`, `*_PASSWORD`, `*_API_KEY`,...) khỏi stdout/stderr.
+- Đã quét DB/audit của các run thật: không có token mẫu, `/etc/passwd` hay nội dung ngoài workspace.
 - Prompt, result, error, event, audit detail đều đi qua redact + truncate trước khi lưu/in.
 - SQLite không có cột credentials; audit JSONL cũng không.
 - DB `0600`, thư mục `~/.trinity`/`logs` `0700`, audit `0600`.
@@ -152,11 +157,20 @@ Chặn vĩnh viễn:
 | Medium | Resume tạo task mới, mất plan/approval history | **Đã sửa**: resume cùng Task ID, plan, scope |
 | Medium | Hai tiến trình có thể resume cùng task | **Đã sửa**: conditional claim + lock + test |
 | Medium | OpenCode default agent có quyền rộng | **Đã sửa**: yêu cầu `agent` tường minh |
+| Medium | Crash giữa task để lại `RUNNING` vĩnh viễn | **Đã sửa**: recovery khi lock free + test |
+| Medium | Env secret có thể lọt vào stdout/stderr | **Đã sửa**: `redact_env_values` + test |
+| Low | Baseline có thể bị nới quyền mà không approval | **Đã bổ sung** hash, deny-rule mutation test, APPROVAL.md |
+| Low | Exit 0 với JSON lỗi bị coi là thành công | **Đã sửa**: fail closed; test JSON rỗng/sai/error event |
 | Low | JSON output chưa được kiểm tra hợp lệ | **Đã bổ sung** metadata `json_valid` |
 | Low | Lỗi permission OpenCode không được phân loại | **Đã bổ sung** `permission_required` |
 | Low | Chưa có migration DB v3.0 → v3.1 | **Đã sửa**: ALTER TABLE + test |
 
-Residual risk: `--approve` + OpenCode agent có shell/edit vẫn có thể thay đổi ngoài workspace. Chỉ dùng agent đã kiểm tra permission và workspace tin cậy.
+Residual risk:
+
+- `--approve` + OpenCode agent có shell/edit vẫn có thể thay đổi ngoài workspace. Chỉ dùng agent đã kiểm tra permission và workspace tin cậy.
+- `PR_SET_PDEATHSIG` chỉ tác động direct child; server/agent detached có thể sống sót. Recovery đánh dấu task `FAILED`, không đảm bảo kill mọi orphan.
+- Xóa `logs/.trinity.lock` khi tiến trình còn chạy có thể phá mutual exclusion; không làm vậy.
+- Baseline approval là quy trình review/commit, không phải chữ ký mật mã. Test hash/rule là tripwire, không thay thế người duyệt.
 
 ## 5. Quy tắc vận hành
 

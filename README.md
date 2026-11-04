@@ -20,8 +20,8 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 > - **Đã chạy read-only prompt thật** qua OpenCode với agent tạm `trinity-readonly` trong workspace giả: task `TRN-20261104-152925-1c79c9` COMPLETED, workspace/Git không đổi, `/etc/passwd` bị `external_directory` deny.
 > - Chưa xác minh agent production (`build`/`general`); mặc định vẫn fail closed nếu chưa cấu hình `agent`.
 > - HTTP API của OpenCode chỉ được health-check; endpoint thực thi có auth **chưa xác minh**, nên mặc định tắt.
-> - CI GitHub Actions: **v3.1 (153 test) PASS** trên Python 3.9 và 3.12.
-> - **153 unittest — 0 failure**.
+> - CI GitHub Actions: **v3.1 (153 test) PASS**; bộ 164 test chạy sau push.
+> - **164 unittest — 0 failure**.
 >
 > Trinity không tuyên bố tích hợp đầy đủ ba agent khi adapter tương ứng chưa được xác minh.
 
@@ -386,6 +386,9 @@ Vì chưa xác minh OpenClaw, `run "chạy lệnh ..."` sẽ dừng ở `FAILED`
 - Khóa tuần tự `fcntl` **fail closed** nếu filesystem không hỗ trợ flock hoặc không phải POSIX.
 - Resume dùng conditional claim trong SQLite, lưu actor/time/scope, không tạo task trùng.
 - OpenCode **không tự dùng agent mặc định**; thiếu `agent` cấu hình → `DENIED`.
+- Crash recovery: task `RUNNING` còn sót chỉ bị đánh dấu `FAILED` khi lock free; không tự đánh dấu `COMPLETED`.
+- Env secret values (`*_SECRET`, `*_TOKEN`, ...) bị redact khỏi stdout/stderr.
+- Baseline read-only có approval policy + hash/deny-rule tripwire; cập nhật phải review và commit mới.
 
 Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên trong có thể tự thực hiện hành động theo policy riêng của nó. Trinity chỉ kiểm soát lệnh do Trinity trực tiếp chạy. Xem chi tiết `docs/SECURITY.md`.
 
@@ -397,7 +400,7 @@ Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên tr
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Kết quả lần chạy gần nhất: **153 test, 0 failure, 0 error**. CI v3.1 (153 test) pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
+Kết quả lần chạy gần nhất: **164 test, 0 failure, 0 error**. CI v3.1 (153 test) pass; bộ 164 test chạy sau push. Xem `docs/TEST_REPORT.md`.
 
 Các nhóm đã kiểm tra:
 
@@ -410,7 +413,9 @@ Các nhóm đã kiểm tra:
 - **OpenCode real read-only**: agent `trinity-readonly`, edit/bash/network/external deny, task completed, workspace/Git unchanged.
 - CLI: version/status/config/tasks/task/run/resume dry-run, profile, không ghi DB/audit khi dry-run.
 - Executor: tuần tự, dừng khi lỗi, approval, resource/lock failure, redaction.
-- Process: `PWD` đồng bộ `cwd`, timeout kill process group, output redaction.
+- Process: `PWD` đồng bộ `cwd`, timeout kill process group, output + env-secret redaction.
+- Crash recovery: orphan RUNNING → FAILED khi lock free; dry-run không recovery; lock busy không đụng task.
+- Baseline: hash, deny→allow mutation detection, approval metadata.
 - Router negation: “không chạy shell” không tạo bước AUTOMATION.
 - Termux simulation: PREFIX detection, profile thresholds, sysconf fallback, fcntl unsupported → fail closed, non-POSIX fail closed.
 

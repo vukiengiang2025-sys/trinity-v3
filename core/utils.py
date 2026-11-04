@@ -78,6 +78,27 @@ def contains_secret(value: object) -> bool:
     return any(pattern.search(text) for pattern, _ in _SECRET_PATTERNS)
 
 
+_ENV_SECRET_KEY = re.compile(
+    r"(?i)(?:^|_)(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE[_-]?KEY|CREDENTIAL|AUTH)(?:_|$)"
+)
+
+
+def redact_env_values(text: str, env: Mapping[str, str]) -> str:
+    """Redact values of credential-looking environment variables.
+
+    This handles arbitrary secret values that do not match a known token
+    shape, but only when the variable name is clearly credential-like.
+    """
+
+    safe = text
+    for key, value in env.items():
+        if not value or len(value) < 8:
+            continue
+        if _ENV_SECRET_KEY.search(str(key)):
+            safe = safe.replace(str(value), "***REDACTED***")
+    return safe
+
+
 def truncate(text: object, limit: int = 20_000, suffix: str = "\n...[đã cắt bớt]") -> str:
     """Redact and truncate text for storage or display."""
 
@@ -169,7 +190,18 @@ def _child_limits(timeout_seconds: int) -> None:
         resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 5))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     except Exception:  # pragma: no cover - platform dependent
-        return
+        pass
+
+    # Linux: kill the direct child if Trinity itself dies.  This is not a
+    # process-tree sandbox; detached grandchildren still need supervision.
+    try:
+        import ctypes
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        PR_SET_PDEATHSIG = 1
+        libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+    except Exception:  # pragma: no cover - non-Linux/platform dependent
+        pass
 
 
 def run_process(
@@ -234,8 +266,8 @@ def run_process(
     return ProcessResult(
         argv=args,
         exit_code=proc.returncode,
-        stdout=redact(stdout)[:max_output],
-        stderr=redact(stderr)[:max_output],
+        stdout=redact_env_values(redact(stdout), child_env)[:max_output],
+        stderr=redact_env_values(redact(stderr), child_env)[:max_output],
         timed_out=timed_out,
         duration_seconds=duration,
         error="quá thời gian cho phép" if timed_out else "",

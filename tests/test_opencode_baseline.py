@@ -68,6 +68,39 @@ class OpenCodeReadonlyBaselineTests(unittest.TestCase):
         self.assertIn("timeout", failures)
         self.assertTrue(all(item["status"] == "FAILED" for item in failures.values()))
 
+    def test_approval_metadata_is_complete(self):
+        approval = self.baseline.get("approval", {})
+        self.assertTrue(approval.get("required"))
+        for key in ("approved_by", "approved_at", "reason", "policy"):
+            self.assertTrue(approval.get(key), f"missing approval field: {key}")
+
+    def test_deny_to_allow_mutation_is_detected(self):
+        def valid(config):
+            rules = config["agents"]["trinity-readonly"]["permissions"]
+            for action in (
+                "edit",
+                "bash",
+                "webfetch",
+                "websearch",
+                "external_directory",
+                "task",
+                "skill",
+                "todowrite",
+                "question",
+            ):
+                matching = [rule for rule in rules if rule.get("action") == action]
+                if not matching or matching[-1].get("effect") != "deny":
+                    return False
+            return True
+
+        self.assertTrue(valid(self.config))
+        mutated = json.loads(json.dumps(self.config))
+        for rule in mutated["agents"]["trinity-readonly"]["permissions"]:
+            if rule.get("action") == "edit":
+                rule["effect"] = "allow"
+                break
+        self.assertFalse(valid(mutated))
+
     def test_fixture_contains_no_provider_secrets(self):
         text = self.config_bytes.decode("utf-8")
         for marker in ("apiKey", "api_key", "password", "Bearer ", "sk-", "ghp_"):

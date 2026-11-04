@@ -137,6 +137,8 @@ Luồng `run` thật:
 
 Không có thread pool, không chạy song song, không retry vô hạn.
 
+Khởi động lại: `Executor.recover_interrupted_tasks()` acquire lock non-blocking; nếu lock free, mọi task `RUNNING` còn sót được đánh dấu `FAILED` với event `recovered`. Nếu lock đang bận, không đụng task. Dry-run không recovery. Không task nào được đánh dấu `COMPLETED` nếu chưa có adapter result hợp lệ.
+
 Luồng `resume` (v3.1):
 
 1. Đọc task theo Task ID; chỉ chấp nhận `WAITING_APPROVAL`.
@@ -212,7 +214,7 @@ class BaseAdapter:
 - `SUCCESS`, `FAILED`, `TIMEOUT`, `UNAVAILABLE`, `DENIED`, `UNVERIFIED`, `DRY_RUN`.
 - Timeout bắt buộc, output redacted, duration.
 
-Mọi subprocess dùng `run_process(argv, timeout, ...)`: `shell=False`, `start_new_session=True`, kill process group khi timeout, giới hạn output. Khi có `cwd`, `PWD`/`OLDPWD` được đồng bộ để công cụ như OpenCode không đọc nhầm project config.
+Mọi subprocess dùng `run_process(argv, timeout, ...)`: `shell=False`, `start_new_session=True`, kill process group khi timeout, giới hạn output. Khi có `cwd`, `PWD`/`OLDPWD` được đồng bộ để công cụ như OpenCode không đọc nhầm project config. Output được redact theo pattern và theo giá trị của các biến môi trường có tên nhạy cảm. Trên Linux, direct child nhận `PR_SET_PDEATHSIG` best-effort.
 
 OpenCode adapter có thêm policy riêng (v3.1):
 
@@ -279,3 +281,5 @@ Không sửa executor để biết chi tiết CLI của agent mới; toàn bộ 
 - OpenCode execution mặc định fail closed nếu chưa cấu hình `agent`; không có agent built-in nào vừa deny edit vừa deny shell.
 - OpenCode read-only đã được kiểm chứng với agent tạm `trinity-readonly`; agent production (`build`/`general`) và HTTP execution vẫn chưa.
 - Guard không kiểm soát công cụ nội bộ của OpenCode sau khi tiến trình được khởi chạy; permission của agent là lớp kiểm soát chính.
+- Recovery chỉ đánh dấu task orphan `FAILED`; không đảm bảo kill mọi process detached.
+- Xóa lock file khi đang chạy có thể phá mutual exclusion; đây là quy tắc vận hành.

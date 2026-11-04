@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from tests.support import PROJECT_ROOT, make_fake_executable
+from storage.memory import TaskManager
 
 
 def run_cli(args, extra_env=None):
@@ -197,6 +198,32 @@ class CliTests(unittest.TestCase):
         result = run_cli(["--db", str(self.db), "resume", "TRN-khong-ton-tai", "--approve"], self.env)
         self.assertEqual(result.returncode, 1)
         self.assertIn("không tìm thấy task", result.stderr)
+
+    def test_run_recovers_orphaned_running_task(self):
+        manager = TaskManager(self.db)
+        manager.create_task(
+            task_id="TRN-orphan-cli",
+            task_type="CODING",
+            prompt="orphan",
+            adapter="opencode",
+            risk_level="medium",
+            profile="linux",
+        )
+        manager.update_status("TRN-orphan-cli", "RUNNING")
+        manager.close()
+
+        result = run_cli(
+            ["--db", str(self.db), "run", "xóa dữ liệu production"],
+            self.env,
+        )
+        self.assertEqual(result.returncode, 3, result.stderr)
+        manager = TaskManager(self.db)
+        try:
+            old = manager.get_task("TRN-orphan-cli")
+            self.assertEqual(old["status"], "FAILED")
+            self.assertIn("recovered", [event["kind"] for event in old["events"]])
+        finally:
+            manager.close()
 
 
 if __name__ == "__main__":

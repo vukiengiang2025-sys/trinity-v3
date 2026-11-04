@@ -103,6 +103,8 @@ class Executor:
         approve: bool = False,
         timeout: Optional[int] = None,
     ) -> ExecutionOutcome:
+        if not dry_run:
+            self.recover_interrupted_tasks()
         route = self.router.route(prompt)
 
         if dry_run:
@@ -207,6 +209,30 @@ class Executor:
                 lock.release()
 
     # ------------------------------------------------------------------
+    def recover_interrupted_tasks(self) -> int:
+        """Fail tasks left RUNNING by a previous Trinity process.
+
+        Recovery only runs when the single-task lock can be acquired.  If a
+        live Trinity holds the lock, the RUNNING task belongs to it and must
+        not be touched.
+        """
+
+        try:
+            lock = self.resource.acquire_lock(timeout=0)
+        except TrinityError:
+            return 0
+        try:
+            count = self.task_manager.fail_running_tasks(
+                "Trinity dừng giữa tác vụ hoặc lock bị mất; "
+                "task được đánh dấu FAILED khi khởi động lại"
+            )
+        finally:
+            lock.release()
+        if count:
+            self._audit("tasks_recovered", "", {"count": count})
+        return count
+
+    # ------------------------------------------------------------------
     def resume(
         self,
         task_id: str,
@@ -222,6 +248,8 @@ class Executor:
         SQLite claim prevents two runners from executing the same task.
         """
 
+        if not dry_run:
+            self.recover_interrupted_tasks()
         task = self.task_manager.get_task(task_id)
         if task is None:
             raise TrinityError(f"không tìm thấy task: {task_id}")

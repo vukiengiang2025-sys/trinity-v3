@@ -3,10 +3,10 @@
 - **Ngày:** 2026-11-04
 - **Môi trường:** Linux Mint 22.3, Python 3.12.3, OpenCode v2.2.5
 - **Lệnh:** `python3 -m unittest discover -s tests -t . -v`
-- **Kết quả:** **153 test — 0 failure — 0 error — OK**
+- **Kết quả:** **164 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
-- **Sau v3.1:** 153 test (+38)
-- **CI:** v3.1 (153 test) PASS trên Python 3.9/3.12
+- **Sau v3.1:** 164 test (+49)
+- **CI:** v3.1 (153 test) PASS; bộ 164 test chờ push
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -19,12 +19,13 @@
 | `test_resource.py` | 11 | RAM đọc được/không đọc được, sysconf fallback, RAM/disk thấp, lock, timeout |
 | `test_task.py` | 12 | Task lifecycle, transition, event, permission, missing DB, redaction, audit |
 | `test_adapters.py` | 26 | Missing tool, fake CLI, timeout, JSON empty/invalid/error event, permission, OpenClaw/Hermes, default-agent deny, standalone |
-| `test_opencode_baseline.py` | 7 | Frozen config hash, deny rules, durability records, failure modes, no secrets |
-| `test_executor.py` | 12 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
+| `test_opencode_baseline.py` | 9 | Frozen config hash, deny rules, durability records, failure modes, no secrets |
+| `test_executor.py` | 13 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
 | `test_resume.py` | 16 | Resume cùng Task ID, approval record, atomic claim, mismatch, migration, lock fail-closed |
-| `test_cli.py` | 17 | version/status/config/tasks/task/run/resume, dry-run, exit code |
-| `test_utils.py` | 10 | Redaction, truncate, mask mapping, subprocess timeout, PWD/cwd consistency |
-| **Tổng** | **153** | |
+| `test_cli.py` | 18 | version/status/config/tasks/task/run/resume, dry-run, exit code |
+| `test_utils.py` | 11 | Redaction, truncate, mask mapping, subprocess timeout, PWD/cwd consistency |
+| `test_recovery.py` | 6 | Orphan RUNNING → FAILED, lock busy, idempotent, dry-run, CLI recovery |
+| **Tổng** | **164** | |
 
 ## 2. CI
 
@@ -104,6 +105,21 @@ Failure modes thật:
 
 Sau tất cả: workspace/Git sandbox không đổi; không còn standalone server treo.
 
+### 3.4 Leakage audit
+
+- Prompt/result/error/event/audit đã được redact; DB/audit thật không chứa token mẫu.
+- Biến môi trường có tên nhạy cảm (`*_SECRET`, `*_TOKEN`, `*_PASSWORD`,...) được redact khỏi stdout/stderr của subprocess.
+- Test exception chứa `password=`/token: task error chỉ còn `REDACTED`.
+- Quét DB/audit của các run thật: không có `root:x:0:0` hoặc nội dung `/etc/passwd`.
+- Baseline permission test: đọc ngoài workspace bị `external_directory` deny.
+
+### 3.5 Baseline approval
+
+- `tests/fixtures/opencode_readonly/APPROVAL.md` quy định quy trình cập nhật.
+- `baseline.json` có `approved_by`, `approved_at`, `reason`, `policy`.
+- Test phát hiện mutation `deny → allow` và hash cấu hình thay đổi.
+- Cập nhật baseline phải commit config + baseline + approval note; không amend lịch sử cũ.
+
 ## 4. Task Resume
 
 Đã kiểm thử:
@@ -117,6 +133,14 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 - Adapter/resource/lock chưa sẵn sàng → task vẫn `WAITING_APPROVAL`.
 - Migration DB v3.0 → v3.1.
 - Task v3.0 thiếu plan/workspace bị từ chối resume.
+
+### 4.1 Crash recovery
+
+- Task `RUNNING` bị bỏ lại sau khi Trinity dừng được đánh dấu `FAILED` khi khởi động lại, **chỉ khi lock có thể acquire**.
+- Không đánh dấu `COMPLETED` nếu chưa có kết quả adapter xác nhận.
+- Recovery idempotent; lock đang bận thì không đụng task.
+- Test CLI: task orphan `RUNNING` → CLI `run` recovery → `FAILED`, sau đó task mới `WAITING_APPROVAL`.
+- `PR_SET_PDEATHSIG` best-effort cho direct child trên Linux; không phải sandbox process tree.
 
 ## 5. Termux compatibility
 
@@ -170,7 +194,7 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
-7. **CI 153 test**: PASS trên Python 3.9/3.12 (run 41860781598).
+7. **CI 164 test**: chờ chạy sau push; CI 153 test trước đó PASS.
 
 ## 9. Cách tái lập
 

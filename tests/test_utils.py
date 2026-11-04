@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import time
@@ -106,6 +107,18 @@ class ProcessTests(unittest.TestCase):
         )
         self.assertNotIn("hunter2", result.stdout)
         self.assertIn("REDACTED", result.stdout)
+
+    def test_sensitive_env_value_is_redacted(self):
+        env = dict(os.environ)
+        env["TRINITY_TEST_SECRET"] = "s3cr3t-value-12345"
+        result = run_process(
+            [sys.executable, "-c", "import os; print(os.environ['TRINITY_TEST_SECRET'])"],
+            timeout=5,
+            env=env,
+        )
+        self.assertTrue(result.ok)
+        self.assertNotIn("s3cr3t-value-12345", result.stdout)
+        self.assertIn("***REDACTED***", result.stdout)
 
 
 if __name__ == "__main__":

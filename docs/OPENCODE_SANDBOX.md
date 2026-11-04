@@ -218,12 +218,13 @@ Sau cả ba:
 | JSON sai định dạng | fake CLI test | **FAILED** — `json_valid=false` | N/A |
 | JSON rỗng | fake CLI test | **FAILED** | N/A |
 | Error event nhưng exit 0 | fake CLI test | **FAILED** — `Agent not found` | N/A |
+| Post-P0 smoke | `TRN-20261104-155256-6544ad` | **COMPLETED** — 4.471 ký tự; leak scan sạch | Không đổi |
 
 Sau timeout, không còn tiến trình `opencode --standalone` treo; service UI `opencode serve --service` của người dùng vẫn chạy độc lập.
 
 ## 12. Cập nhật hồi quy
 
-Bộ test hiện tại: **153 test**. Các test mới bao gồm:
+Bộ test hiện tại: **164 test**. Các test mới bao gồm:
 
 - `PWD`/`cwd` consistency.
 - `--standalone` và không truyền `--auto`.

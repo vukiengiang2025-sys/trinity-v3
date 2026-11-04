@@ -10,7 +10,8 @@
     "TRN-20261104-152925-1c79c9",
     "TRN-20261104-154042-7e4461",
     "TRN-20261104-154054-3d8a4c",
-    "TRN-20261104-154103-f1bc57"
+    "TRN-20261104-154103-f1bc57",
+    "TRN-20261104-155256-6544ad"
   ],
   "permission_test": {
     "read_inside_workspace": "allow",
@@ -64,7 +65,21 @@
     }
   ],
   "sandbox_git_head": "3d5aa908630c0eb4b828dcbb6e3b92a75cb10360",
-  "test_count": 153,
+  "test_count": 164,
   "baseline_commit": "680886d33870b162b04690b46a26df0e611db357",
-  "ci_run_153": "41860781598"
+  "ci_run_153": "41860781598",
+  "approval": {
+    "required": true,
+    "approved_by": "vukiengiang2025-sys",
+    "approved_at": "2026-11-04",
+    "reason": "Initial v3.1 trinity-readonly baseline freeze",
+    "policy": "Any change to opencode.json or baseline.json requires review, explicit approval, a reason, and a new commit. Never weaken a deny rule without a separate security review."
+  },
+  "post_p0_run": {
+    "task_id": "TRN-20261104-155256-6544ad",
+    "status": "COMPLETED",
+    "result_chars": 4471,
+    "leakage_scan": "clean",
+    "standalone_leftovers": 0
+  }
 }
