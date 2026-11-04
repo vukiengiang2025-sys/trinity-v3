@@ -5,6 +5,7 @@
 - **Branch:** `main`
 - **HEAD khi bắt đầu audit:** `9f8ba37`
 - **HEAD code hoàn tất P0:** `2a56726`
+- **HEAD controlled write:** `ca0c088`
 - **Phạm vi:** P0 security/recovery, P1 Termux readiness, adapter status, test/CI, tài liệu.
 - **Nguyên tắc:** không mở quyền agent, không sửa global OpenCode config, không cài Hermes/OpenClaw, không force push.
 
@@ -15,7 +16,7 @@
 | Git | `main`, working tree sạch, remote khớp |
 | Test local | 167 PASS (Python 3.9.25 và 3.12) |
 | CI gần nhất đã xanh | 153 test |
-| CI mới | 174 test PASS; 187 test queued |
+| CI mới | 187 test PASS |
 | OpenCode | v2.2.5, CLI AVAILABLE |
 | Hermes | UNAVAILABLE |
 | OpenClaw | UNAVAILABLE |
@@ -26,7 +27,7 @@
 
 ### 2.1 CI
 
-- Các run cũ từng queued; run `41866867803` (commit `2a56726`, 174 test) đã **PASS** cả Python 3.9/3.12.
+- CI 187 test (commit `ca0c088`) **PASS** cả Python 3.9/3.12: run `41872189084`.
 - GitHub Actions API báo Actions operational; không có runner được cấp.
 - Không sửa code để “làm CI xanh”; không tuyên bố PASS cho 187 test trên CI.
 - Đã xác minh local bằng Python 3.9.25 (`uv`) và Python 3.12: **187 test PASS**.
@@ -120,8 +121,7 @@ Residual:
 | Failure/Error | 0 / 0 |
 | `termux_self_test.py --quick` trên Linux | **9/9 PASS** |
 | Security/recovery/baseline tests | PASS |
-| CI 174 test | **PASS** — run 41866867803 |
-| CI 187 test | **QUEUED** — chưa xác nhận |
+| CI 187 test | **PASS** — run 41872189084 |
 
 ## 4. File thay đổi trong audit này
 
@@ -140,8 +140,7 @@ Residual:
 
 - HEAD trước commit report: `9f8ba37`.
 - Không force push, không reset/clean/amend.
-- CI run 174 test: https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41866867803
-- CI 187 test: queued sau push; không tuyên bố PASS.
+- CI run 187 test: https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41872189084
 - Các commit mốc `b0ecdc5`, `bcd562b`, `680886d`, `972ce0f`, `fbedee7`, `46c3126`, `9f8ba37` được giữ nguyên.
 
 ## 6. Hướng dẫn chạy trên Android/Termux
@@ -170,5 +169,5 @@ Gửi lại `logs/termux-self-test-*.txt` để đối chiếu.
 - OpenCode read-only: **LIVE VERIFIED**.
 - Termux: **BLOCKED** do thiết bị khóa/không có quyền chạy; self-test đã sẵn sàng.
 - Hermes/OpenClaw: **UNAVAILABLE**.
-- CI 174: **PASS** (3.9/3.12); CI 187: **QUEUED**.
+- CI 187: **PASS** (3.9/3.12).
 - Chưa bật `build/general`; chưa cho Trinity tự sửa repository.
