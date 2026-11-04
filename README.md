@@ -19,7 +19,7 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 > - OpenCode execution **fail closed**: phải cấu hình `adapters.opencode.agent` đã kiểm tra permission; không tự dùng agent mặc định.
 > - Chưa chạy prompt thật qua OpenCode vì chưa có agent vừa deny edit vừa deny shell; đường thực thi đã được kiểm thử bằng fake CLI (argv, timeout, lỗi, permission, JSON).
 > - HTTP API của OpenCode chỉ được health-check; endpoint thực thi có auth **chưa xác minh**, nên mặc định tắt.
-> - CI GitHub Actions: **PASS** trên Python 3.9 và 3.12.
+> - CI GitHub Actions: **v3.1 PASS** trên Python 3.9 và 3.12.
 > - **139 unittest — 0 failure**.
 >
 > Trinity không tuyên bố tích hợp đầy đủ ba agent khi adapter tương ứng chưa được xác minh.
@@ -393,7 +393,7 @@ Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên tr
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Kết quả lần chạy gần nhất: **139 test, 0 failure, 0 error**. CI pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
+Kết quả lần chạy gần nhất: **139 test, 0 failure, 0 error**. CI v3.1 pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
 
 Các nhóm đã kiểm tra:
 

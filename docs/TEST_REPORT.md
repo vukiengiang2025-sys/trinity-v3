@@ -6,7 +6,7 @@
 - **Kết quả:** **139 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
 - **Sau v3.1:** 139 test (+24)
-- **CI GitHub Actions:** PASS — Python 3.9 và Python 3.12
+- **CI GitHub Actions:** PASS — Python 3.9 và Python 3.12 (run 41853332251)
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -34,7 +34,7 @@ Workflow: `.github/workflows/tests.yml`
 | `unittest (3.9)` | **success** |
 | `unittest (3.12)` | **success** |
 
-Chạy tại commit `9ecf4ea` (v3.0). v3.1 sẽ chạy lại sau khi push.
+v3.1 code commit `2298aba`; run: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41853332251>.
 
 ## 3. Đối chiếu yêu cầu kiểm thử
 
@@ -139,7 +139,7 @@ Trạng thái: **IMPLEMENTED & TESTED** ở mức executor + CLI dry-run; chưa 
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G trong môi trường build.
 6. **Resume chạy thật qua OpenCode**: chỉ test executor/CLI với fake adapter; default-agent fail-closed đã test.
-7. **CI v3.1**: cần chạy lại sau commit/push; CI v3.0 đã pass 3.9/3.12.
+7. **CI v3.1**: PASS trên Python 3.9 và 3.12 (run 41853332251).
 
 ## 10. Cách tái lập
 
