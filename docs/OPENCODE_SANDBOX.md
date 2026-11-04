@@ -188,7 +188,7 @@ Baseline ghi nhận:
 | Config SHA-256 | `519b6c3936027c0f9f3b8999ca41c2e2e85b4b0cda73275f37435fec017d6f59` |
 | Task read-only đầu tiên | `TRN-20261104-152925-1c79c9` |
 | Sandbox Git HEAD | `3d5aa908630c0eb4b828dcbb6e3b92a75cb10360` |
-| Reference commits | `b0ecdc5` (code), `bcd562b` (docs) |
+| Reference commits | `b0ecdc5` (code), `bcd562b` (docs), `680886d` (baseline freeze) |
 
 Test `tests/test_opencode_baseline.py` kiểm tra hash cấu hình, các rule deny bắt buộc, quyền đọc nhạy cảm, metadata baseline và sự tồn tại của durability/failure records.
 

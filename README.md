@@ -20,7 +20,7 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 > - **Đã chạy read-only prompt thật** qua OpenCode với agent tạm `trinity-readonly` trong workspace giả: task `TRN-20261104-152925-1c79c9` COMPLETED, workspace/Git không đổi, `/etc/passwd` bị `external_directory` deny.
 > - Chưa xác minh agent production (`build`/`general`); mặc định vẫn fail closed nếu chưa cấu hình `agent`.
 > - HTTP API của OpenCode chỉ được health-check; endpoint thực thi có auth **chưa xác minh**, nên mặc định tắt.
-> - CI GitHub Actions: **v3.1 (143 test) PASS**; bộ 153 test sẽ chạy sau push.
+> - CI GitHub Actions: **v3.1 (153 test) PASS** trên Python 3.9 và 3.12.
 > - **153 unittest — 0 failure**.
 >
 > Trinity không tuyên bố tích hợp đầy đủ ba agent khi adapter tương ứng chưa được xác minh.
@@ -397,7 +397,7 @@ Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên tr
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Kết quả lần chạy gần nhất: **153 test, 0 failure, 0 error**. CI v3.1 (143 test) đã pass; bộ 153 test sẽ chạy sau push. Xem `docs/TEST_REPORT.md`.
+Kết quả lần chạy gần nhất: **153 test, 0 failure, 0 error**. CI v3.1 (153 test) pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
 
 Các nhóm đã kiểm tra:
 
