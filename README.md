@@ -508,3 +508,4 @@ Tài liệu chi tiết:
 - [`docs/OPENCODE_SANDBOX.md`](docs/OPENCODE_SANDBOX.md)
 - [`docs/OPENCODE_WRITE.md`](docs/OPENCODE_WRITE.md)
 - [`docs/HERMES_OPENCLAW.md`](docs/HERMES_OPENCLAW.md)
+- [`docs/reports/TRINITY_P1_COMPLETION_REPORT.md`](docs/reports/TRINITY_P1_COMPLETION_REPORT.md)
