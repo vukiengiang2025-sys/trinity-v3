@@ -225,7 +225,7 @@ Sau timeout, không còn tiến trình `opencode --standalone` treo; service UI 
 
 ## 12. Cập nhật hồi quy
 
-Bộ test hiện tại: **185 test**. Các test mới bao gồm:
+Bộ test hiện tại: **187 test**. Các test mới bao gồm:
 
 - `PWD`/`cwd` consistency.
 - `--standalone` và không truyền `--auto`.

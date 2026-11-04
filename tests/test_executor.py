@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +19,15 @@ class ExecutorTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.config = make_config(self.root)
         self.audit = AuditLog(self.config.log_dir)
+
+    def init_git_workspace(self):
+        workspace = self.config.workspace_root
+        subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+        subprocess.run(["git", "config", "user.name", "Trinity Test"], cwd=workspace, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=workspace, check=True)
+        (workspace / "seed.txt").write_text("seed\n", encoding="utf-8")
+        subprocess.run(["git", "add", "seed.txt"], cwd=workspace, check=True)
+        subprocess.run(["git", "commit", "-qm", "seed"], cwd=workspace, check=True)
 
     def executor(self, adapters, resource=None):
         manager = TaskManager(self.config.db_path)
@@ -67,10 +77,32 @@ class ExecutorTests(unittest.TestCase):
         waiting = executor.execute("sửa lỗi python", write=True, approve=False)
         self.assertEqual(waiting.status, "WAITING_APPROVAL")
         self.assertEqual(adapter.calls, [])
+        self.init_git_workspace()
         live = executor.execute("sửa lỗi python", write=True, approve=True)
         self.assertEqual(live.status, "COMPLETED")
         self.assertEqual(len(adapter.calls), 1)
         self.assertEqual(adapter.calls[0].action, "code_write")
+        events = [event["kind"] for event in live.task["events"]]
+        self.assertIn("git_before", events)
+        self.assertIn("git_after", events)
+
+    def test_write_rejects_non_git_workspace(self):
+        adapter = FakeAdapter("opencode")
+        executor = self.executor({"opencode": adapter})
+        outcome = executor.execute("sửa lỗi python", write=True, approve=True)
+        self.assertEqual(outcome.status, "FAILED")
+        self.assertIn("Git repository", outcome.message)
+        self.assertEqual(adapter.calls, [])
+
+    def test_write_rejects_dirty_workspace(self):
+        self.init_git_workspace()
+        (self.config.workspace_root / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+        adapter = FakeAdapter("opencode")
+        executor = self.executor({"opencode": adapter})
+        outcome = executor.execute("sửa lỗi python", write=True, approve=True)
+        self.assertEqual(outcome.status, "FAILED")
+        self.assertIn("thay đổi chưa commit", outcome.message)
+        self.assertEqual(adapter.calls, [])
 
     def test_high_risk_with_approval_executes(self):
         adapter = FakeAdapter("opencode", stdout="done")

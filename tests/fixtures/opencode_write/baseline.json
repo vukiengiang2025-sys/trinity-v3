@@ -9,5 +9,8 @@
   "test_gate": "python3 -m unittest: 2/2 PASS",
   "workspace_changed_by_design": true,
   "sandbox": "/tmp/trinity-write-sandbox",
-  "approval": "required: run --write --approve; write agent only in disposable workspace"
+  "approval": "required: run --write --approve; write agent only in disposable workspace",
+  "checkpoint_task_id": "TRN-20261104-165216-33af0b",
+  "git_checkpoint_verified": true,
+  "checkpoint_test_gate": "python3 -m unittest: 2/2 PASS"
 }

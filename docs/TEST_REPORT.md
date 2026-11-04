@@ -3,10 +3,10 @@
 - **Ngày:** 2026-11-04
 - **Môi trường:** Linux Mint 22.3, Python 3.12.3, OpenCode v2.2.5
 - **Lệnh:** `python3 -m unittest discover -s tests -t . -v`
-- **Kết quả:** **185 test — 0 failure — 0 error — OK**
+- **Kết quả:** **187 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
-- **Sau v3.1:** 185 test (+70)
-- **Local 3.9/3.12:** 185 test PASS; **CI:** 174 test PASS, 185 queued
+- **Sau v3.1:** 187 test (+72)
+- **Local 3.9/3.12:** 187 test PASS; **CI:** 174 test PASS, 187 queued
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -20,7 +20,7 @@
 | `test_task.py` | 12 | Task lifecycle, transition, event, permission, missing DB, redaction, audit |
 | `test_adapters.py` | 29 | Missing tool, fake CLI, timeout, JSON empty/invalid/error event, permission, OpenClaw/Hermes, default-agent deny, standalone |
 | `test_opencode_baseline.py` | 9 | Frozen config hash, deny rules, durability records, failure modes, no secrets |
-| `test_executor.py` | 14 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
+| `test_executor.py` | 17 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
 | `test_resume.py` | 16 | Resume cùng Task ID, approval record, atomic claim, mismatch, migration, lock fail-closed |
 | `test_cli.py` | 19 | version/status/config/tasks/task/run/resume, dry-run, exit code |
 | `test_utils.py` | 11 | Redaction, truncate, mask mapping, subprocess timeout, PWD/cwd consistency |
@@ -28,7 +28,7 @@
 | `test_termux_self_test.py` | 1 | One-command Termux/Linux self-test |
 | `test_opencode_write_baseline.py` | 5 | Frozen write agent hash/permissions/evidence |
 | `test_security_static.py` | 2 | AST check no shell=True/os.system; no credential literals |
-| **Tổng** | **185** | |
+| **Tổng** | **187** | |
 
 ## 2. CI
 
@@ -37,7 +37,7 @@
 | `unittest (3.9)` | **success** (v3.1, 174 test) |
 | `unittest (3.12)` | **success** (v3.1, 174 test) |
 
-Local Python 3.9.25 chạy qua `uv` ngày 2026-11-04: **185 test PASS**.
+Local Python 3.9.25 chạy qua `uv` ngày 2026-11-04: **187 test PASS**.
 Run 174 test trên CI: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41866867803>
 
 ## 3. OpenCode Adapter — kiểm chứng end-to-end
@@ -210,7 +210,7 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
-7. **CI 185 test**: queued sau push; CI 174 test trước đó PASS (run 41866867803).
+7. **CI 187 test**: queued sau push; CI 174 test trước đó PASS (run 41866867803).
 
 ## 9. Cách tái lập
 

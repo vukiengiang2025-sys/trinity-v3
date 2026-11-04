@@ -21,7 +21,7 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 > - Chưa xác minh agent production (`build`/`general`); mặc định vẫn fail closed nếu chưa cấu hình `agent`.
 > - HTTP API của OpenCode chỉ được health-check; endpoint thực thi có auth **chưa xác minh**, nên mặc định tắt.
 > - CI GitHub Actions: **174 test PASS** trên Python 3.9 và 3.12.
-> - **185 unittest — 0 failure**.
+> - **187 unittest — 0 failure**.
 >
 > Trinity không tuyên bố tích hợp đầy đủ ba agent khi adapter tương ứng chưa được xác minh.
 
@@ -414,7 +414,7 @@ Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên tr
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Kết quả lần chạy gần nhất: **185 test, 0 failure, 0 error** trên Python 3.9.25 và 3.12. CI v3.1 (174 test) pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
+Kết quả lần chạy gần nhất: **187 test, 0 failure, 0 error** trên Python 3.9.25 và 3.12. CI v3.1 (174 test) pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
 
 Các nhóm đã kiểm tra:
 
@@ -507,3 +507,4 @@ Tài liệu chi tiết:
 - [`docs/TERMUX_COMPATIBILITY.md`](docs/TERMUX_COMPATIBILITY.md)
 - [`docs/OPENCODE_SANDBOX.md`](docs/OPENCODE_SANDBOX.md)
 - [`docs/OPENCODE_WRITE.md`](docs/OPENCODE_WRITE.md)
+- [`docs/HERMES_OPENCLAW.md`](docs/HERMES_OPENCLAW.md)

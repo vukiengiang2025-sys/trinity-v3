@@ -24,7 +24,7 @@ from core.guard import Guard
 from core.resource import ResourceDecision, ResourceGuard
 from core.router import Route, Router
 from core.task import PENDING, RUNNING, WAITING_APPROVAL, FAILED, COMPLETED
-from core.utils import TrinityError, truncate, utc_now
+from core.utils import TrinityError, run_process, truncate, utc_now
 from storage.memory import AuditLog, TaskManager
 from adapters.base import AdapterRequest, AdapterResult, ResultStatus
 from adapters.hermes import HermesAdapter
@@ -193,6 +193,25 @@ class Executor:
                 resource=resource,
             )
 
+        if write:
+            checkpoint, checkpoint_error = self._write_checkpoint()
+            if checkpoint is None:
+                task = self._mark_failed(route.task_id, checkpoint_error)
+                self._audit("write_preflight_denied", route.task_id, {"reason": checkpoint_error})
+                return ExecutionOutcome(
+                    task_id=route.task_id,
+                    status=FAILED,
+                    message=checkpoint_error,
+                    route=route,
+                    task=task,
+                    resource=resource,
+                )
+            self.task_manager.add_event(
+                route.task_id,
+                "git_before",
+                f"head={checkpoint['head']}; status_clean=true",
+            )
+
         if approve and route.risk_level in self.config.approval_risks:
             self.task_manager.add_event(route.task_id, "approval", f"người dùng phê duyệt risk={route.risk_level}")
             self._audit("approval_granted", route.task_id, {"risk": route.risk_level})
@@ -230,6 +249,9 @@ class Executor:
             )
             heartbeat.start()
             task = self._run_plan(route, prompt, steps, timeout, approve)
+            if write:
+                self._record_write_after(route.task_id)
+                task = self.task_manager.get_task(route.task_id) or task
             if task["status"] == COMPLETED:
                 self._audit("task_completed", route.task_id, {"steps": len(steps)})
                 message = f"Hoàn thành {len(steps)} bước tuần tự."
@@ -247,6 +269,8 @@ class Executor:
             )
         except Exception as exc:  # storage/guard failures must not leave a silent task
             error = truncate(f"lỗi điều phối: {exc}", 2000)
+            if write:
+                self._record_write_after(route.task_id)
             task = self._mark_failed(route.task_id, error)
             self._audit("task_failed", route.task_id, {"error": error})
             return ExecutionOutcome(
@@ -417,6 +441,22 @@ class Executor:
                     resource=resource,
                 )
 
+        if route.write_mode:
+            checkpoint, checkpoint_error = self._write_checkpoint()
+            if checkpoint is None:
+                return self._resume_blocked(
+                    task_id,
+                    route,
+                    task,
+                    f"Write preflight từ chối: {checkpoint_error}",
+                    resource=resource,
+                )
+            self.task_manager.add_event(
+                task_id,
+                "git_before",
+                f"head={checkpoint['head']}; status_clean=true",
+            )
+
         try:
             lock = self.resource.acquire_lock(timeout=0)
         except TrinityError as exc:
@@ -456,6 +496,9 @@ class Executor:
             )
             heartbeat.start()
             task = self._run_plan(route, prompt, steps, timeout, True)
+            if route.write_mode:
+                self._record_write_after(task_id)
+                task = self.task_manager.get_task(task_id) or task
             if task["status"] == COMPLETED:
                 self._audit("task_completed", task_id, {"steps": len(steps), "resumed": True})
                 message = f"Hoàn thành resume {len(steps)} bước tuần tự."
@@ -475,6 +518,8 @@ class Executor:
         except Exception as exc:
             error = truncate(f"lỗi resume: {exc}", 2000)
             if claimed:
+                if route.write_mode:
+                    self._record_write_after(task_id)
                 task = self._mark_failed(task_id, error)
                 self._audit("task_failed", task_id, {"error": error, "resumed": True})
                 return ExecutionOutcome(
@@ -550,6 +595,52 @@ class Executor:
                 raise TrinityError(f"bước {index} thiếu adapter/action")
             plan.append({str(key): str(value) for key, value in step.items()})
         return plan
+
+    def _git(self, *args: str):
+        result = run_process(
+            ["git", *args],
+            timeout=10,
+            cwd=self.config.workspace_root,
+            max_output=50_000,
+        )
+        if not result.ok:
+            return None, (result.error or result.stderr or result.stdout or "git thất bại").strip()
+        return result.stdout, ""
+
+    def _write_checkpoint(self):
+        inside, error = self._git("rev-parse", "--is-inside-work-tree")
+        if error or inside is None or inside.strip() != "true":
+            return None, "controlled write yêu cầu workspace là Git repository"
+        status, error = self._git("status", "--porcelain")
+        if error or status is None:
+            return None, f"không đọc được Git status: {error}"
+        if status.strip():
+            return None, (
+                "controlled write từ chối workspace đang có thay đổi chưa commit; "
+                "hãy review/commit hoặc dùng workspace sạch"
+            )
+        head, error = self._git("rev-parse", "HEAD")
+        if error or head is None:
+            return None, f"không đọc được Git HEAD: {error}"
+        return {"head": head.strip(), "status": "clean"}, ""
+
+    def _record_write_after(self, task_id: str) -> None:
+        status, status_error = self._git("status", "--porcelain")
+        diff, diff_error = self._git("diff", "--stat")
+        if status_error or diff_error:
+            self.task_manager.add_event(
+                task_id,
+                "git_after",
+                f"không đọc được Git sau write: {status_error or diff_error}",
+            )
+            return
+        changed = [line for line in (status or "").splitlines() if line.strip()]
+        digest = hashlib.sha256(((status or "") + "\n" + (diff or "")).encode("utf-8")).hexdigest()[:16]
+        self.task_manager.add_event(
+            task_id,
+            "git_after",
+            f"changed_files={len(changed)}; digest={digest}; diff_stat={truncate(diff or '', 1000)}",
+        )
 
     def _approval_scope(self, route: Route) -> str:
         payload = json.dumps(

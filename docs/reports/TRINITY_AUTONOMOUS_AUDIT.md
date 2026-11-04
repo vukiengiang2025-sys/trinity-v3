@@ -15,7 +15,7 @@
 | Git | `main`, working tree sạch, remote khớp |
 | Test local | 167 PASS (Python 3.9.25 và 3.12) |
 | CI gần nhất đã xanh | 153 test |
-| CI mới | 174 test PASS; 185 test queued |
+| CI mới | 174 test PASS; 187 test queued |
 | OpenCode | v2.2.5, CLI AVAILABLE |
 | Hermes | UNAVAILABLE |
 | OpenClaw | UNAVAILABLE |
@@ -28,8 +28,8 @@
 
 - Các run cũ từng queued; run `41866867803` (commit `2a56726`, 174 test) đã **PASS** cả Python 3.9/3.12.
 - GitHub Actions API báo Actions operational; không có runner được cấp.
-- Không sửa code để “làm CI xanh”; không tuyên bố PASS cho 185 test trên CI.
-- Đã xác minh local bằng Python 3.9.25 (`uv`) và Python 3.12: **185 test PASS**.
+- Không sửa code để “làm CI xanh”; không tuyên bố PASS cho 187 test trên CI.
+- Đã xác minh local bằng Python 3.9.25 (`uv`) và Python 3.12: **187 test PASS**.
 
 ### 2.2 Termux
 
@@ -98,26 +98,30 @@ Residual:
 - Quyền: read/glob/grep/list + edit trong workspace; bash chỉ git status/diff/log và python3 -m unittest/py_compile; deny external/network/task/skill/system.
 - Approval: `--write --approve`; `--write` alone → WAITING_APPROVAL; `--approve` alone không bật write.
 - Live task `TRN-20261104-164146-bfed3b` COMPLETED; thêm `subtract` + test; test gate 2/2 PASS.
+- Checkpoint task `TRN-20261104-165216-33af0b` COMPLETED; `git_before`/`git_after`, test gate 2/2 PASS; sandbox restored.
 - Sandbox được khôi phục; `trinity-readonly` không đổi.
 - `trinity-write` mới VERIFIED trong sandbox, chưa production.
 
 ### 2.7 Hermes/OpenClaw
 
+- Hermes: PyPI `hermes-agent` 0.19.0 metadata available; chưa cài; UNAVAILABLE.
+- OpenClaw: npm `openclaw` 2026.10.10 metadata available; chưa cài; gateway không chạy.
 - `CODE VERIFIED` + `MOCK VERIFIED` ở mức unit test.
 - `LIVE VERIFIED`: **không**, vì CLI/gateway không tồn tại.
-- Không tự cài.
+- Không tự cài theo quy tắc an toàn.
+- Chi tiết: `docs/HERMES_OPENCLAW.md`.
 
 ## 3. Test
 
 | Hạng mục | Kết quả |
 |---|---|
-| Full suite local Python 3.12 | **185 PASS** |
-| Full suite local Python 3.9.25 | **185 PASS** |
+| Full suite local Python 3.12 | **187 PASS** |
+| Full suite local Python 3.9.25 | **187 PASS** |
 | Failure/Error | 0 / 0 |
 | `termux_self_test.py --quick` trên Linux | **9/9 PASS** |
 | Security/recovery/baseline tests | PASS |
 | CI 174 test | **PASS** — run 41866867803 |
-| CI 185 test | **QUEUED** — chưa xác nhận |
+| CI 187 test | **QUEUED** — chưa xác nhận |
 
 ## 4. File thay đổi trong audit này
 
@@ -137,7 +141,7 @@ Residual:
 - HEAD trước commit report: `9f8ba37`.
 - Không force push, không reset/clean/amend.
 - CI run 174 test: https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41866867803
-- CI 185 test: queued sau push; không tuyên bố PASS.
+- CI 187 test: queued sau push; không tuyên bố PASS.
 - Các commit mốc `b0ecdc5`, `bcd562b`, `680886d`, `972ce0f`, `fbedee7`, `46c3126`, `9f8ba37` được giữ nguyên.
 
 ## 6. Hướng dẫn chạy trên Android/Termux
@@ -166,5 +170,5 @@ Gửi lại `logs/termux-self-test-*.txt` để đối chiếu.
 - OpenCode read-only: **LIVE VERIFIED**.
 - Termux: **BLOCKED** do thiết bị khóa/không có quyền chạy; self-test đã sẵn sàng.
 - Hermes/OpenClaw: **UNAVAILABLE**.
-- CI 174: **PASS** (3.9/3.12); CI 185: **QUEUED**.
+- CI 174: **PASS** (3.9/3.12); CI 187: **QUEUED**.
 - Chưa bật `build/general`; chưa cho Trinity tự sửa repository.

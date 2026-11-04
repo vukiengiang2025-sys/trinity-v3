@@ -65,6 +65,7 @@ Sandbox `/tmp/trinity-write-sandbox`:
 |---|---|
 | Approval-only task | `TRN-20261104-164146-ac673b` — `WAITING_APPROVAL`, không chạy |
 | Live write task | `TRN-20261104-164146-bfed3b` — `COMPLETED` |
+| Checkpoint write task | `TRN-20261104-165216-33af0b` — `COMPLETED`, có `git_before`/`git_after` |
 | Thay đổi | `calc.py` thêm `subtract`; `test_calc.py` thêm test |
 | Test gate | `python3 -m unittest` — 2/2 PASS |
 | Workspace ngoài | Không đổi |
