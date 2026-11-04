@@ -1,0 +1,83 @@
+# TRINITY profile: Android Termux
+# Không đặt API key, token, mật khẩu hoặc credential trong file này.
+profile: termux
+
+platform:
+  name: termux
+  display_name: "Android Termux"
+
+workspace:
+  root: "."
+  allowed_roots:
+    - "."
+
+storage:
+  db_path: "~/.trinity/trinity.db"
+  log_dir: "logs"
+  max_result_chars: 12000
+
+resources:
+  # Ngưỡng thấp hơn Linux nhưng vẫn từ chối khi thiếu RAM.
+  min_free_ram_mb: 192
+  min_free_disk_mb: 150
+  max_concurrent_tasks: 1
+  default_timeout_seconds: 600
+  max_timeout_seconds: 1800
+  lock_path: "logs/.trinity.lock"
+  on_low_memory: deny
+
+guard:
+  allowed_commands:
+    - git
+    - ls
+    - pwd
+    - cat
+    - head
+    - tail
+    - wc
+    - grep
+    - find
+    - python3
+    - pytest
+  require_approval_for_risk:
+    - high
+  max_command_seconds: 60
+  allow_write: true
+
+adapters:
+  opencode:
+    enabled: true
+    binary: opencode
+    mode: cli
+    http_enabled: false
+    http_url: "http://127.0.0.1:4096"
+    http_health_path: "/global/health"
+    timeout_seconds: 600
+    format: json
+    model: null
+    agent: null
+
+  hermes:
+    enabled: true
+    binary: hermes
+    timeout_seconds: 300
+    memory_path: null
+    memory_search_command: []
+    memory_store_command: []
+
+  openclaw:
+    enabled: true
+    binary: openclaw
+    timeout_seconds: 300
+    gateway_enabled: false
+    gateway_url: "http://127.0.0.1:18789"
+    gateway_health_path: "/health"
+    invoke_prefix: []
+    command_allowlist:
+      - git
+      - ls
+      - pwd
+      - cat
+      - grep
+      - find
+      - python3

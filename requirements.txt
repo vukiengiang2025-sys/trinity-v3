@@ -1,0 +1,3 @@
+# Trinity chỉ cần một dependency ngoài Standard Library.
+# Không thêm framework web, Docker, ORM hoặc thư viện nặng.
+PyYAML>=6.0,<7.0

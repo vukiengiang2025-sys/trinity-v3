@@ -1,0 +1,364 @@
+"""SQLite task history and append-only audit log.
+
+Only redacted text is persisted.  There are deliberately no columns for API
+keys, tokens or environment dumps.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+from core.utils import StorageError, truncate, utc_now
+
+PENDING = "PENDING"
+RUNNING = "RUNNING"
+WAITING_APPROVAL = "WAITING_APPROVAL"
+COMPLETED = "COMPLETED"
+FAILED = "FAILED"
+CANCELLED = "CANCELLED"
+
+STATUSES = (PENDING, RUNNING, WAITING_APPROVAL, COMPLETED, FAILED, CANCELLED)
+TERMINAL_STATUSES = {COMPLETED, FAILED, CANCELLED}
+ALLOWED_TRANSITIONS = {
+    PENDING: {RUNNING, WAITING_APPROVAL, FAILED, CANCELLED},
+    WAITING_APPROVAL: {RUNNING, FAILED, CANCELLED},
+    RUNNING: {COMPLETED, FAILED, CANCELLED},
+    COMPLETED: set(),
+    FAILED: set(),
+    CANCELLED: set(),
+}
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    task_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    adapter TEXT NOT NULL,
+    risk_level TEXT NOT NULL,
+    profile TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    result TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
+    dry_run INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS task_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    message TEXT NOT NULL,
+    FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_events_task ON task_events(task_id, id);
+"""
+
+
+def _secure_dir(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(path, 0o700)
+    except OSError:
+        pass
+
+
+def _secure_file(path: Path) -> None:
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+class TaskManager:
+    """Persistent task state.  A read on a missing DB never creates it."""
+
+    def __init__(self, db_path: Union[str, Path], max_result_chars: int = 20000):
+        self.db_path = str(db_path)
+        self.max_result_chars = max(1000, int(max_result_chars))
+        self._conn: Optional[sqlite3.Connection] = None
+
+    # ------------------------------------------------------------------
+    # Connection / schema
+    # ------------------------------------------------------------------
+    def _connect(self, create: bool) -> Optional[sqlite3.Connection]:
+        if self._conn is not None:
+            if create:
+                try:
+                    self._conn.executescript(SCHEMA)
+                    self._conn.commit()
+                except sqlite3.Error as exc:
+                    raise StorageError(f"không tạo được schema SQLite: {exc}") from exc
+            return self._conn
+        is_memory = self.db_path == ":memory:"
+        path = Path(self.db_path)
+        if not is_memory:
+            if not path.exists() and not create:
+                return None
+            _secure_dir(path.parent)
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=5.0)
+        except sqlite3.Error as exc:
+            raise StorageError(f"không mở được SQLite {self.db_path}: {exc}") from exc
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        if not is_memory:
+            try:
+                conn.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.Error:
+                pass
+            _secure_file(path)
+        self._conn = conn
+        if create:
+            try:
+                conn.executescript(SCHEMA)
+                conn.commit()
+            except sqlite3.Error as exc:
+                raise StorageError(f"không tạo được schema SQLite: {exc}") from exc
+        else:
+            try:
+                row = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'"
+                ).fetchone()
+            except sqlite3.Error:
+                return None
+            if row is None:
+                return None
+        return self._conn
+
+    def close(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            finally:
+                self._conn = None
+
+    def __enter__(self) -> "TaskManager":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    # ------------------------------------------------------------------
+    # Writes
+    # ------------------------------------------------------------------
+    def create_task(
+        self,
+        task_id: str,
+        task_type: str,
+        prompt: str,
+        adapter: str,
+        risk_level: str,
+        profile: str,
+        status: str = PENDING,
+        dry_run: bool = False,
+        error: str = "",
+    ) -> Dict[str, Any]:
+        if not task_id or not str(task_id).strip():
+            raise StorageError("Task ID không được rỗng")
+        if status not in STATUSES:
+            raise StorageError(f"trạng thái không hợp lệ: {status}")
+        now = utc_now()
+        conn = self._connect(create=True)
+        assert conn is not None
+        try:
+            conn.execute(
+                """
+                INSERT INTO tasks
+                    (id, created_at, updated_at, task_type, status, adapter,
+                     risk_level, profile, prompt, result, error, dry_run)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+                """,
+                (
+                    str(task_id),
+                    now,
+                    now,
+                    str(task_type),
+                    status,
+                    str(adapter),
+                    str(risk_level),
+                    str(profile),
+                    truncate(prompt, self.max_result_chars),
+                    truncate(error, self.max_result_chars),
+                    1 if dry_run else 0,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO task_events (task_id, created_at, kind, message) VALUES (?, ?, ?, ?)",
+                (str(task_id), now, "created", truncate(f"{task_type} via {adapter} ({risk_level})", 2000)),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError as exc:
+            raise StorageError(f"Task ID đã tồn tại: {task_id}") from exc
+        except sqlite3.Error as exc:
+            raise StorageError(f"không tạo được task: {exc}") from exc
+        task = self.get_task(str(task_id))
+        if task is None:
+            raise StorageError("không đọc lại được task vừa tạo")
+        return task
+
+    def update_status(
+        self,
+        task_id: str,
+        status: str,
+        result: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if status not in STATUSES:
+            raise StorageError(f"trạng thái không hợp lệ: {status}")
+        conn = self._connect(create=False)
+        if conn is None:
+            raise StorageError(f"không tìm thấy task: {task_id}")
+        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (str(task_id),)).fetchone()
+        if row is None:
+            raise StorageError(f"không tìm thấy task: {task_id}")
+        current = row["status"]
+        if status != current and status not in ALLOWED_TRANSITIONS.get(current, set()):
+            raise StorageError(f"không thể chuyển {current} -> {status} cho task {task_id}")
+
+        now = utc_now()
+        assignments = ["status = ?", "updated_at = ?"]
+        values: List[Any] = [status, now]
+        if result is not None:
+            assignments.append("result = ?")
+            values.append(truncate(result, self.max_result_chars))
+        if error is not None:
+            assignments.append("error = ?")
+            values.append(truncate(error, self.max_result_chars))
+        values.append(str(task_id))
+        try:
+            conn.execute(f"UPDATE tasks SET {', '.join(assignments)} WHERE id = ?", values)
+            if status != current:
+                conn.execute(
+                    "INSERT INTO task_events (task_id, created_at, kind, message) VALUES (?, ?, ?, ?)",
+                    (str(task_id), now, "status", truncate(f"{current} -> {status}", 2000)),
+                )
+            conn.commit()
+        except sqlite3.Error as exc:
+            raise StorageError(f"không cập nhật được task: {exc}") from exc
+        task = self.get_task(str(task_id))
+        if task is None:
+            raise StorageError("không đọc lại được task sau cập nhật")
+        return task
+
+    def add_event(self, task_id: str, kind: str, message: str) -> None:
+        conn = self._connect(create=False)
+        if conn is None:
+            raise StorageError(f"không tìm thấy task: {task_id}")
+        try:
+            conn.execute(
+                "INSERT INTO task_events (task_id, created_at, kind, message) VALUES (?, ?, ?, ?)",
+                (str(task_id), utc_now(), str(kind)[:100], truncate(message, 4000)),
+            )
+            conn.commit()
+        except sqlite3.Error as exc:
+            raise StorageError(f"không ghi được event: {exc}") from exc
+
+    def cancel_task(self, task_id: str) -> Dict[str, Any]:
+        return self.update_status(task_id, CANCELLED, error="người dùng hủy tác vụ")
+
+    # ------------------------------------------------------------------
+    # Reads
+    # ------------------------------------------------------------------
+    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._connect(create=False)
+        if conn is None:
+            return None
+        try:
+            row = conn.execute("SELECT * FROM tasks WHERE id = ?", (str(task_id),)).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        if row is None:
+            return None
+        task = dict(row)
+        task["dry_run"] = bool(task.get("dry_run"))
+        try:
+            events = conn.execute(
+                "SELECT created_at, kind, message FROM task_events WHERE task_id = ? ORDER BY id",
+                (str(task_id),),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            events = []
+        task["events"] = [dict(event) for event in events]
+        return task
+
+    def list_tasks(self, limit: int = 20, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        conn = self._connect(create=False)
+        if conn is None:
+            return []
+        limit = max(1, min(int(limit), 500))
+        sql = "SELECT * FROM tasks"
+        params: List[Any] = []
+        if status:
+            sql += " WHERE status = ?"
+            params.append(status)
+        sql += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
+        params.append(limit)
+        try:
+            rows = conn.execute(sql, params).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["dry_run"] = bool(item.get("dry_run"))
+            result.append(item)
+        return result
+
+    def summary(self) -> Dict[str, int]:
+        conn = self._connect(create=False)
+        if conn is None:
+            return {}
+        try:
+            rows = conn.execute("SELECT status, COUNT(*) AS n FROM tasks GROUP BY status").fetchall()
+        except sqlite3.OperationalError:
+            return {}
+        return {row["status"]: int(row["n"]) for row in rows}
+
+
+class AuditLog:
+    """Append-only, redacted JSONL audit trail."""
+
+    def __init__(self, log_dir: Union[str, Path], filename: str = "audit.jsonl"):
+        self.log_dir = Path(log_dir)
+        self.path = self.log_dir / filename
+
+    def write(self, event: str, task_id: Optional[str] = None, detail: Any = None, level: str = "info") -> bool:
+        record = {
+            "ts": utc_now(),
+            "level": str(level),
+            "event": str(event),
+            "task_id": task_id or "",
+            "detail": self._sanitize(detail),
+        }
+        try:
+            _secure_dir(self.log_dir)
+            with open(self.path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+            _secure_file(self.path)
+            return True
+        except OSError:
+            return False
+
+    def _sanitize(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            result = {}
+            for key, item in value.items():
+                lowered = str(key).lower()
+                if any(token in lowered for token in ("password", "passwd", "secret", "token", "api_key", "apikey", "private_key")):
+                    result[str(key)] = "***REDACTED***"
+                else:
+                    result[str(key)] = self._sanitize(item)
+            return result
+        if isinstance(value, (list, tuple)):
+            return [self._sanitize(item) for item in value]
+        if value is None:
+            return None
+        return truncate(value, 4000)

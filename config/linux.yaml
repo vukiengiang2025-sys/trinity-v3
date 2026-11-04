@@ -1,0 +1,93 @@
+# TRINITY profile: Linux Mint / Debian / Ubuntu
+# Không đặt API key, token, mật khẩu hoặc credential trong file này.
+profile: linux
+
+platform:
+  name: linux
+  display_name: "Linux Mint / Debian / Ubuntu"
+
+workspace:
+  # Đường dẫn tương đối được tính từ thư mục gốc của Trinity.
+  root: "."
+  allowed_roots:
+    - "."
+
+storage:
+  db_path: "~/.trinity/trinity.db"
+  log_dir: "logs"
+  max_result_chars: 20000
+
+resources:
+  min_free_ram_mb: 384
+  min_free_disk_mb: 200
+  max_concurrent_tasks: 1
+  default_timeout_seconds: 900
+  max_timeout_seconds: 3600
+  lock_path: "logs/.trinity.lock"
+  # deny = từ chối chạy khi RAM thấp; warn = chỉ cảnh báo.
+  on_low_memory: deny
+
+guard:
+  # Chỉ các executable này được phép chạy qua shell-command guard.
+  allowed_commands:
+    - git
+    - ls
+    - pwd
+    - cat
+    - head
+    - tail
+    - wc
+    - grep
+    - find
+    - python3
+    - pytest
+  require_approval_for_risk:
+    - high
+  max_command_seconds: 120
+  allow_write: true
+
+adapters:
+  opencode:
+    enabled: true
+    binary: opencode
+    # mode: cli (đã xác minh) hoặc http (chưa xác minh endpoint thực thi).
+    mode: cli
+    http_enabled: false
+    http_url: "http://127.0.0.1:4096"
+    http_health_path: "/global/health"
+    timeout_seconds: 900
+    format: json
+    # null = dùng cấu hình model hiện có của OpenCode, không ghi đè.
+    model: null
+    agent: null
+
+  hermes:
+    enabled: true
+    binary: hermes
+    timeout_seconds: 300
+    # Không mặc định ~/.hermes/memories. Chỉ đặt khi đã xác minh thực tế.
+    memory_path: null
+    # Command template chỉ được dùng sau khi operator xác minh CLI Hermes.
+    # Ví dụ (không bật mặc định):
+    # memory_search_command: ["hermes", "memory", "search", "{query}"]
+    # memory_store_command:  ["hermes", "memory", "store", "{prompt}"]
+    memory_search_command: []
+    memory_store_command: []
+
+  openclaw:
+    enabled: true
+    binary: openclaw
+    timeout_seconds: 300
+    gateway_enabled: false
+    gateway_url: "http://127.0.0.1:18789"
+    gateway_health_path: "/health"
+    # Prefix đã xác minh để gọi OpenClaw, ví dụ ["openclaw", "exec"].
+    invoke_prefix: []
+    command_allowlist:
+      - git
+      - ls
+      - pwd
+      - cat
+      - grep
+      - find
+      - python3

@@ -1,0 +1,216 @@
+"""LOGIC adapter: OpenCode.
+
+The CLI is used as a subprocess with an argv list.  The HTTP API is only
+probed (unauthenticated health check) and is disabled by default because the
+authenticated execution endpoints have not been verified on this install.
+No OpenCode configuration file is read, written or modified.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any
+
+from core.config import AppConfig
+from core.utils import utc_now
+from .base import (
+    AdapterHealth,
+    AdapterRequest,
+    AdapterResult,
+    AdapterStatus,
+    BaseAdapter,
+    ResultStatus,
+    run_process,
+)
+
+
+class OpenCodeAdapter(BaseAdapter):
+    name = "opencode"
+    role = "LOGIC"
+
+    def __init__(self, config: AppConfig, guard: Any = None):
+        super().__init__(config, guard)
+
+    def discover(self, force: bool = False) -> AdapterHealth:
+        if self._health is not None and not force:
+            return self._health
+        disabled = self._disabled_health()
+        if disabled:
+            self._health = disabled
+            return disabled
+
+        settings = self.settings()
+        binary = self.binary()
+        http_enabled = bool(settings.get("http_enabled", False))
+        http_url = str(settings.get("http_url", "")) if http_enabled else ""
+        http_result = None
+        if http_enabled and http_url:
+            http_result = self._http_health(
+                http_url, str(settings.get("http_health_path", "/global/health"))
+            )
+
+        if not binary:
+            capabilities = ["http_health"] if http_result and http_result.get("reachable") else []
+            status = AdapterStatus.INSTALLED_BUT_UNVERIFIED if capabilities else AdapterStatus.UNAVAILABLE
+            detail = "không tìm thấy OpenCode CLI trong PATH"
+            if http_result and http_result.get("reachable"):
+                detail += "; server HTTP sống nhưng endpoint thực thi chưa được xác minh"
+            self._health = AdapterHealth(
+                name=self.name,
+                role=self.role,
+                status=status,
+                detail=detail,
+                capabilities=capabilities,
+                http_url=http_url or None,
+            )
+            return self._health
+
+        version_proc = self._probe([binary, "--version"], timeout=10)
+        version = self._version(version_proc.stdout or version_proc.stderr) if version_proc.ok else ""
+        help_proc = self._probe([binary, "run", "--help"], timeout=10)
+        cli_verified = version_proc.ok and help_proc.ok
+        capabilities = []
+        if cli_verified:
+            capabilities = ["code_task", "general_task", "cli_run", "json_output"]
+        mode = str(settings.get("mode", "cli")).lower()
+        if http_result and http_result.get("reachable"):
+            capabilities.append("http_health")
+
+        if cli_verified and mode in ("cli", "auto"):
+            status = AdapterStatus.AVAILABLE
+            detail = f"CLI đã xác minh (mode={mode})"
+        elif cli_verified and mode == "http":
+            # Health checks are not execution endpoints; never claim HTTP is ready.
+            status = AdapterStatus.INSTALLED_BUT_UNVERIFIED
+            detail = "CLI có mặt nhưng profile yêu cầu HTTP; endpoint thực thi chưa xác minh"
+        else:
+            status = AdapterStatus.INSTALLED_BUT_UNVERIFIED
+            detail = "tìm thấy executable nhưng chưa xác minh được --version/run --help"
+
+        self._health = AdapterHealth(
+            name=self.name,
+            role=self.role,
+            status=status,
+            version=version,
+            executable=binary,
+            detail=detail,
+            capabilities=capabilities,
+            http_url=http_url or None,
+        )
+        return self._health
+
+    def execute(self, request: AdapterRequest) -> AdapterResult:
+        started = utc_now()
+        settings = self.settings()
+        mode = str(settings.get("mode", "cli")).lower()
+        if mode == "http":
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.UNVERIFIED,
+                error="HTTP execution chưa được xác minh trên phiên bản OpenCode này; đặt mode: cli",
+                started_at=started,
+            )
+
+        health = self.discover()
+        if health.status != AdapterStatus.AVAILABLE:
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.UNAVAILABLE,
+                error=health.detail or "OpenCode không khả dụng",
+                started_at=started,
+            )
+
+        if request.action not in ("code_task", "general_task"):
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.UNVERIFIED,
+                error=f"action không được hỗ trợ: {request.action}",
+                started_at=started,
+            )
+
+        prompt = request.prompt or ""
+        if not prompt.strip():
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.FAILED,
+                error="prompt rỗng",
+                started_at=started,
+            )
+        if len(prompt) > 100_000:
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.FAILED,
+                error="prompt quá dài (giới hạn 100.000 ký tự)",
+                started_at=started,
+            )
+        if "\x00" in prompt or prompt.startswith("-"):
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.DENIED,
+                error="prompt chứa NUL hoặc bắt đầu bằng '-' (nguy cơ argument injection)",
+                started_at=started,
+            )
+
+        binary = self.binary()
+        if not binary:
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.UNAVAILABLE,
+                error="không tìm thấy OpenCode CLI",
+                started_at=started,
+            )
+
+        output_format = str(settings.get("format", "json"))
+        if output_format not in ("default", "json"):
+            output_format = "json"
+        argv = [
+            binary,
+            "run",
+            "--format",
+            output_format,
+            "--title",
+            f"trinity-{request.task_id}",
+        ]
+        model = settings.get("model")
+        agent = settings.get("agent")
+        if model:
+            argv.extend(["--model", str(model)])
+        if agent:
+            argv.extend(["--agent", str(agent)])
+        argv.append(prompt)
+
+        if request.dry_run:
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.DRY_RUN,
+                stdout="",
+                started_at=started,
+                metadata={
+                    "mode": "cli",
+                    "argv_preview": [part if part != prompt else "<prompt>" for part in argv],
+                },
+            )
+
+        workspace = Path(request.workspace)
+        if not workspace.is_dir():
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.FAILED,
+                error=f"workspace không tồn tại hoặc không phải thư mục: {workspace}",
+                started_at=started,
+            )
+
+        env = dict(os.environ)
+        env["TRINITY_TASK_ID"] = request.task_id
+        env["TRINITY_ADAPTER"] = self.name
+
+        timeout = self.timeout(request)
+        process = run_process(argv, timeout=timeout, cwd=workspace, env=env, max_output=150_000)
+        metadata = {
+            "mode": "cli",
+            "format": output_format,
+            "timeout_seconds": timeout,
+            "version": health.version,
+        }
+        return self._result_from_process(self.name, process, started_at=started, metadata=metadata)
