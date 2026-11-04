@@ -357,6 +357,41 @@ class TaskManager:
     def cancel_task(self, task_id: str) -> Dict[str, Any]:
         return self.update_status(task_id, CANCELLED, error="người dùng hủy tác vụ")
 
+    def recover_running_task(self, task_id: str, reason: str, stale_before: float) -> bool:
+        """Atomically fail a RUNNING task only if its lease is still stale."""
+
+        conn = self._connect(create=False)
+        if conn is None:
+            return False
+        now = utc_now()
+        safe_error = truncate(reason, self.max_result_chars)
+        try:
+            cursor = conn.execute(
+                """
+                UPDATE tasks
+                   SET status = ?, updated_at = ?, error = ?
+                 WHERE id = ? AND status = ?
+                   AND (heartbeat_at = 0 OR heartbeat_at <= ?)
+                """,
+                (FAILED, now, safe_error, str(task_id), RUNNING, float(stale_before)),
+            )
+            if cursor.rowcount != 1:
+                conn.rollback()
+                return False
+            conn.execute(
+                "INSERT INTO task_events (task_id, created_at, kind, message) VALUES (?, ?, ?, ?)",
+                (str(task_id), now, "status", f"{RUNNING} -> {FAILED} (recovery)"),
+            )
+            conn.execute(
+                "INSERT INTO task_events (task_id, created_at, kind, message) VALUES (?, ?, ?, ?)",
+                (str(task_id), now, "recovered", safe_error),
+            )
+            conn.commit()
+            return True
+        except sqlite3.Error:
+            conn.rollback()
+            return False
+
     def fail_running_tasks(self, reason: str, stale_before: Optional[float] = None) -> int:
         """Mark orphaned RUNNING tasks as FAILED after a restart.
 
@@ -378,13 +413,8 @@ class TaskManager:
             rows = conn.execute(sql, params).fetchall()
         except sqlite3.OperationalError:
             return 0
-        count = 0
-        for row in rows:
-            task_id = row["id"]
-            self.update_status(task_id, FAILED, error=reason)
-            self.add_event(task_id, "recovered", reason)
-            count += 1
-        return count
+        cutoff = time.time() if stale_before is None else float(stale_before)
+        return sum(1 for row in rows if self.recover_running_task(row["id"], reason, cutoff))
 
     def claim_for_resume(
         self,

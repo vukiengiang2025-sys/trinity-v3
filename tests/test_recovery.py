@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -89,6 +90,25 @@ class RecoveryTests(unittest.TestCase):
             conn.close()
         self.assertEqual(self.executor().recover_interrupted_tasks(), 1)
         self.assertEqual(self.manager.get_task("TRN-fresh")["status"], "FAILED")
+
+    def test_atomic_recovery_rejects_fresh_lease(self):
+        self.manager.create_task(
+            task_id="TRN-atomic",
+            task_type="CODING",
+            prompt="atomic",
+            adapter="opencode",
+            risk_level="medium",
+            profile="linux",
+        )
+        self.manager.mark_running("TRN-atomic", "runner-a", os.getpid(), "host-a")
+        self.assertFalse(
+            self.manager.recover_running_task("TRN-atomic", "stale attempt", time.time() - 60)
+        )
+        self.assertEqual(self.manager.get_task("TRN-atomic")["status"], "RUNNING")
+        self.assertTrue(
+            self.manager.recover_running_task("TRN-atomic", "forced stale", time.time() + 1)
+        )
+        self.assertEqual(self.manager.get_task("TRN-atomic")["status"], "FAILED")
 
     def test_mark_running_and_heartbeat_lease(self):
         self.manager.create_task(
