@@ -116,7 +116,7 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 
 ## 9. Cập nhật kiểm định v3.1
 
-- CI v3.1: **success** cho cả `unittest (3.9)` và `unittest (3.12)` với 153 test (run 41860781598). Bộ 174 test PASS local trên Python 3.9.25 (uv) và 3.12; CI run 174 đang queued.
+- CI v3.1: **success** cho cả `unittest (3.9)` và `unittest (3.12)` với 153 test (run 41860781598). Bộ 174 test PASS trên CI Python 3.9/3.12 (run 41866867803) và local Python 3.9.25/3.12.
 - Bộ test v3.1: **174 test**, 0 failure, 0 error.
 - Lock `fcntl`: phát hiện khả năng fail-open; đã sửa thành **fail closed** khi thiếu fcntl/non-POSIX/filesystem không hỗ trợ.
 - Task resume: đã triển khai cùng Task ID, plan JSON, approval actor/time/scope, atomic claim.

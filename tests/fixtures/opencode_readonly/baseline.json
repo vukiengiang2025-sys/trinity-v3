@@ -11,7 +11,8 @@
     "TRN-20261104-154042-7e4461",
     "TRN-20261104-154054-3d8a4c",
     "TRN-20261104-154103-f1bc57",
-    "TRN-20261104-155256-6544ad"
+    "TRN-20261104-155256-6544ad",
+    "TRN-20261104-162444-0c3708"
   ],
   "permission_test": {
     "read_inside_workspace": "allow",
@@ -81,5 +82,12 @@
     "result_chars": 4471,
     "leakage_scan": "clean",
     "standalone_leftovers": 0
+  },
+  "lease_live_run": {
+    "task_id": "TRN-20261104-162444-0c3708",
+    "status": "COMPLETED",
+    "result_chars": 4660,
+    "runner_lease": "present",
+    "workspace_changed": false
   }
 }

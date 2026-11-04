@@ -6,7 +6,7 @@
 - **Kết quả:** **174 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
 - **Sau v3.1:** 174 test (+59)
-- **Local 3.9/3.12:** 174 test PASS; **CI:** v3.1 (153 test) PASS, run 174 queued
+- **Local 3.9/3.12:** 174 test PASS; **CI:** v3.1 (174 test) PASS trên Python 3.9/3.12
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -33,11 +33,11 @@
 
 | Job | Kết quả |
 |---|---|
-| `unittest (3.9)` | **success** (v3.1, 153 test) |
-| `unittest (3.12)` | **success** (v3.1, 153 test) |
+| `unittest (3.9)` | **success** (v3.1, 174 test) |
+| `unittest (3.12)` | **success** (v3.1, 174 test) |
 
 Local Python 3.9.25 chạy qua `uv` ngày 2026-11-04: **174 test PASS**.
-Run 153 test trên CI: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41860781598>
+Run 174 test trên CI: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41866867803>
 
 ## 3. OpenCode Adapter — kiểm chứng end-to-end
 
@@ -199,7 +199,7 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
-7. **CI 174 test**: đang queued; local Python 3.9.25/3.12 PASS 174 test.
+7. **CI 174 test**: PASS trên Python 3.9/3.12 (run 41866867803).
 
 ## 9. Cách tái lập
 

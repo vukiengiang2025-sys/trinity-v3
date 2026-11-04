@@ -219,6 +219,7 @@ Sau cả ba:
 | JSON rỗng | fake CLI test | **FAILED** | N/A |
 | Error event nhưng exit 0 | fake CLI test | **FAILED** — `Agent not found` | N/A |
 | Post-P0 smoke | `TRN-20261104-155256-6544ad` | **COMPLETED** — 4.471 ký tự; leak scan sạch | Không đổi |
+| Post-lease live run | `TRN-20261104-162444-0c3708` | **COMPLETED** — 4.660 ký tự; runner lease có heartbeat | Không đổi |
 
 Sau timeout, không còn tiến trình `opencode --standalone` treo; service UI `opencode serve --service` của người dùng vẫn chạy độc lập.
 
