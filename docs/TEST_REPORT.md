@@ -6,7 +6,7 @@
 - **Kết quả:** **167 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
 - **Sau v3.1:** 167 test (+52)
-- **CI:** v3.1 (153 test) PASS; bộ 167 test chờ push
+- **Local 3.9/3.12:** 167 test PASS; **CI:** v3.1 (153 test) PASS, run 167 queued
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -34,7 +34,8 @@
 | `unittest (3.9)` | **success** (v3.1, 153 test) |
 | `unittest (3.12)` | **success** (v3.1, 153 test) |
 
-Run 153 test: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41860781598>
+Local Python 3.9.25 chạy qua `uv` ngày 2026-11-04: **167 test PASS**.
+Run 153 test trên CI: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41860781598>
 
 ## 3. OpenCode Adapter — kiểm chứng end-to-end
 
@@ -196,7 +197,7 @@ Sau tất cả: workspace/Git sandbox không đổi; không còn standalone serv
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
 5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
 6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
-7. **CI 167 test**: chờ chạy sau push; CI 153 test trước đó PASS.
+7. **CI 167 test**: đang queued; local Python 3.9.25/3.12 PASS 167 test.
 
 ## 9. Cách tái lập
 
