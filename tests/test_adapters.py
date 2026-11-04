@@ -35,6 +35,10 @@ class AdapterTestBase(unittest.TestCase):
 
 
 class OpenCodeAdapterTests(AdapterTestBase):
+    def setUp(self):
+        super().setUp()
+        self.config.data["adapters"]["opencode"]["agent"] = "test-agent"
+
     def test_missing_binary_is_unavailable(self):
         self.config.data["adapters"]["opencode"]["binary"] = "definitely-not-installed-trinity"
         adapter = OpenCodeAdapter(self.config)
@@ -98,6 +102,48 @@ class OpenCodeAdapterTests(AdapterTestBase):
         adapter.discover(force=True)
         result = adapter.execute(self.request())
         self.assertEqual(result.status, ResultStatus.FAILED)
+
+    def test_json_output_is_detected_without_parsing_away_raw_text(self):
+        fake = make_fake_executable(self.root, "opencode-json", mode="json")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        result = adapter.execute(self.request())
+        self.assertEqual(result.status, ResultStatus.SUCCESS)
+        self.assertTrue(result.metadata.get("json_valid"))
+        self.assertIn('"ok": true', result.stdout)
+
+    def test_permission_failure_is_surfaced(self):
+        fake = make_fake_executable(self.root, "opencode-permission", mode="permission")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        result = adapter.execute(self.request())
+        self.assertEqual(result.status, ResultStatus.FAILED)
+        self.assertTrue(result.metadata.get("permission_required"))
+        self.assertIn("phê duyệt", result.error)
+
+    def test_default_agent_is_not_used_implicitly(self):
+        fake = make_fake_executable(self.root, "opencode-fake")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        self.config.data["adapters"]["opencode"]["agent"] = None
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        ready, reason = adapter.execution_ready()
+        self.assertFalse(ready)
+        self.assertIn("chưa cấu hình", reason)
+        result = adapter.execute(self.request())
+        self.assertEqual(result.status, ResultStatus.DENIED)
+        self.assertIn("chưa cấu hình", result.error)
+
+    def test_explicit_agent_is_execution_ready(self):
+        fake = make_fake_executable(self.root, "opencode-fake")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        self.config.data["adapters"]["opencode"]["agent"] = "reviewed-agent"
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        ready, reason = adapter.execution_ready()
+        self.assertTrue(ready, reason)
 
 
 class HermesAdapterTests(AdapterTestBase):

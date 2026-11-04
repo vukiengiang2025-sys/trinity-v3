@@ -18,7 +18,7 @@ import yaml
 
 from .utils import ConfigError, mask_mapping, which
 
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_DIR = PROJECT_ROOT / "config"
 
@@ -78,6 +78,8 @@ DEFAULTS: Dict[str, Any] = {
             "format": "json",
             "model": None,
             "agent": None,
+            # Safety default: do not fall back to OpenCode's default agent.
+            "require_explicit_agent": True,
         },
         "hermes": {
             "enabled": True,

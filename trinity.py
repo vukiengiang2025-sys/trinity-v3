@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TRINITY v3.0 - Lightweight AI Agent Orchestrator.
+"""TRINITY v3.1 - Lightweight AI Agent Orchestrator.
 
 Usage:
     python3 trinity.py status
@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import platform
 import shutil
@@ -63,13 +64,14 @@ def _add_global_options(parser: argparse.ArgumentParser, suppress: bool = False)
 def build_parser() -> VNParser:
     parser = VNParser(
         prog="trinity",
-        description="TRINITY v3.0 - Lightweight AI Agent Orchestrator",
+        description="TRINITY v3.1 - Lightweight AI Agent Orchestrator",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Ví dụ:\n"
             "  python3 trinity.py status\n"
             "  python3 trinity.py run --dry-run \"sửa lỗi pytest trong core/router.py\"\n"
             "  python3 trinity.py run --approve \"chạy lệnh git status\"\n"
+            "  python3 trinity.py resume TRN-20260101-120000-abcdef --approve\n"
             "  python3 trinity.py task TRN-20260101-120000-abcdef"
         ),
     )
@@ -90,6 +92,12 @@ def build_parser() -> VNParser:
     run.add_argument("--dry-run", action="store_true", help="Chỉ lập kế hoạch, không ghi dữ liệu")
     run.add_argument("--approve", action="store_true", help="Phê duyệt rõ ràng cho tác vụ rủi ro cao")
     run.add_argument("--timeout", type=_positive_int, default=None, help="Timeout mỗi adapter (giây)")
+
+    resume = sub.add_parser("resume", parents=[common], help="Tiếp tục task WAITING_APPROVAL bằng Task ID cũ")
+    resume.add_argument("task_id", help="Task ID đang WAITING_APPROVAL")
+    resume.add_argument("--approve", action="store_true", help="Phê duyệt rõ ràng để resume")
+    resume.add_argument("--dry-run", action="store_true", help="Kiểm tra điều kiện resume, không ghi dữ liệu")
+    resume.add_argument("--timeout", type=_positive_int, default=None, help="Timeout mỗi adapter (giây)")
 
     tasks = sub.add_parser("tasks", parents=[common], help="Liệt kê lịch sử nhiệm vụ")
     tasks.add_argument("--limit", type=_positive_int, default=20, help="Số nhiệm vụ tối đa (mặc định 20)")
@@ -303,7 +311,13 @@ def cmd_doctor(args: argparse.Namespace, config: AppConfig) -> int:
     for key, label in (("hermes", "BRAIN/Hermes"), ("opencode", "LOGIC/OpenCode"), ("openclaw", "MUSCLE/OpenClaw")):
         health = adapters[key].health(force=True)
         status = "PASS" if health.status.value == "AVAILABLE" else ("FAIL" if health.status.value == "ERROR" else "WARN")
-        _doctor_check(checks, label, status, f"{health.status.value}: {health.detail}")
+        detail = f"{health.status.value}: {health.detail}"
+        if key == "opencode" and health.status.value == "AVAILABLE":
+            adapter_config = config.adapter("opencode")
+            if adapter_config.get("require_explicit_agent", True) and not adapter_config.get("agent"):
+                status = "WARN"
+                detail += " — chưa cấu hình agent; execution sẽ fail closed"
+        _doctor_check(checks, label, status, detail)
 
     guard = Guard(config)
     safe_ok = guard.check_command(["git", "status"]).allowed
@@ -388,6 +402,37 @@ def cmd_run(args: argparse.Namespace, config: AppConfig) -> int:
     return EXIT_FAILED
 
 
+def cmd_resume(args: argparse.Namespace, config: AppConfig) -> int:
+    outcome = _executor(config, args).resume(
+        args.task_id,
+        approve=bool(args.approve),
+        timeout=args.timeout,
+        dry_run=bool(args.dry_run),
+    )
+    _print_route(outcome)
+    if outcome.resource and outcome.resource.warnings:
+        for warning in outcome.resource.warnings:
+            print(f"Cảnh báo: {warning}")
+    print()
+    if outcome.dry_run:
+        print(f"Kết quả: DRY_RUN - {outcome.message}")
+        return EXIT_OK
+    if outcome.status == "WAITING_APPROVAL":
+        print(f"Kết quả: WAITING_APPROVAL - {outcome.message}")
+        print(f"Task ID: {outcome.task_id}")
+        return EXIT_APPROVAL
+    if outcome.status == "COMPLETED":
+        print(f"Kết quả: COMPLETED - {outcome.message}")
+        if outcome.task and outcome.task.get("result"):
+            print("\n" + str(outcome.task["result"]))
+        print(f"\nTask ID: {outcome.task_id}")
+        return EXIT_OK
+    print(f"Kết quả: {outcome.status} - {outcome.message}")
+    if outcome.task:
+        print(f"Task ID: {outcome.task_id}")
+    return EXIT_FAILED
+
+
 def _print_route(outcome: ExecutionOutcome) -> None:
     route = outcome.route
     _print_header("KẾ HOẠCH")
@@ -435,7 +480,23 @@ def cmd_task(args: argparse.Namespace, config: AppConfig) -> int:
     _print_header(f"TASK {task['id']}")
     for key in ("created_at", "updated_at", "task_type", "status", "adapter", "risk_level", "profile"):
         print(f"{key:<12}: {task.get(key, '')}")
+    print(f"resume_count: {task.get('resume_count', 0)}")
     print(f"prompt      : {redact(task.get('prompt', ''))}")
+    if task.get("approved_by"):
+        print(f"approved_by : {redact(task['approved_by'])}")
+        print(f"approved_at : {task.get('approved_at', '')}")
+        print(f"scope       : {redact(task.get('approval_scope', ''))}")
+    if task.get("plan_json"):
+        try:
+            plan = json.loads(task["plan_json"])
+            print("Kế hoạch    :")
+            for step in plan:
+                print(
+                    f"  {step.get('step', '?')}. {step.get('role', ''):<6} "
+                    f"{step.get('adapter', ''):<8} {step.get('action', '')}"
+                )
+        except (json.JSONDecodeError, TypeError):
+            print("Kế hoạch    : (không đọc được plan_json)")
     if task.get("error"):
         print(f"error       : {redact(task['error'])}")
     if task.get("result"):
@@ -483,6 +544,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             return cmd_doctor(args, config)
         if args.command == "run":
             return cmd_run(args, config)
+        if args.command == "resume":
+            return cmd_resume(args, config)
         if args.command == "tasks":
             return cmd_tasks(args, config)
         if args.command == "task":

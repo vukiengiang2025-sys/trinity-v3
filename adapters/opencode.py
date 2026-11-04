@@ -8,12 +8,13 @@ No OpenCode configuration file is read, written or modified.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
 
 from core.config import AppConfig
-from core.utils import utc_now
+from core.utils import truncate, utc_now
 from .base import (
     AdapterHealth,
     AdapterRequest,
@@ -77,9 +78,16 @@ class OpenCodeAdapter(BaseAdapter):
         if http_result and http_result.get("reachable"):
             capabilities.append("http_health")
 
+        require_explicit = bool(settings.get("require_explicit_agent", True))
+        configured_agent = settings.get("agent")
         if cli_verified and mode in ("cli", "auto"):
             status = AdapterStatus.AVAILABLE
-            detail = f"CLI đã xác minh (mode={mode})"
+            policy = (
+                "execute yêu cầu agent cụ thể đã kiểm tra permission"
+                if require_explicit and not configured_agent
+                else f"agent={configured_agent or 'OpenCode default'}"
+            )
+            detail = f"CLI đã xác minh (mode={mode}); {policy}"
         elif cli_verified and mode == "http":
             # Health checks are not execution endpoints; never claim HTTP is ready.
             status = AdapterStatus.INSTALLED_BUT_UNVERIFIED
@@ -99,6 +107,19 @@ class OpenCodeAdapter(BaseAdapter):
             http_url=http_url or None,
         )
         return self._health
+
+    def execution_ready(self):
+        health = self.discover(force=True)
+        if health.status != AdapterStatus.AVAILABLE:
+            return False, health.detail or "OpenCode không khả dụng"
+        settings = self.settings()
+        if bool(settings.get("require_explicit_agent", True)) and not settings.get("agent"):
+            return (
+                False,
+                "chưa cấu hình adapters.opencode.agent; "
+                "không tự dùng agent mặc định của OpenCode",
+            )
+        return True, ""
 
     def execute(self, request: AdapterRequest) -> AdapterResult:
         started = utc_now()
@@ -152,6 +173,20 @@ class OpenCodeAdapter(BaseAdapter):
                 started_at=started,
             )
 
+        agent = settings.get("agent")
+        require_explicit = bool(settings.get("require_explicit_agent", True))
+        if require_explicit and not agent and not request.dry_run:
+            return AdapterResult(
+                adapter=self.name,
+                status=ResultStatus.DENIED,
+                error=(
+                    "chưa cấu hình adapters.opencode.agent; "
+                    "Trinity không tự dùng agent mặc định của OpenCode. "
+                    "Chỉ đặt agent sau khi kiểm tra permission của nó."
+                ),
+                started_at=started,
+            )
+
         binary = self.binary()
         if not binary:
             return AdapterResult(
@@ -173,7 +208,6 @@ class OpenCodeAdapter(BaseAdapter):
             f"trinity-{request.task_id}",
         ]
         model = settings.get("model")
-        agent = settings.get("agent")
         if model:
             argv.extend(["--model", str(model)])
         if agent:
@@ -213,4 +247,36 @@ class OpenCodeAdapter(BaseAdapter):
             "timeout_seconds": timeout,
             "version": health.version,
         }
-        return self._result_from_process(self.name, process, started_at=started, metadata=metadata)
+        result = self._result_from_process(self.name, process, started_at=started, metadata=metadata)
+        if output_format == "json":
+            result.metadata["json_valid"] = self._json_valid(result.stdout)
+        if result.status != ResultStatus.SUCCESS:
+            combined = f"{result.stdout}\n{result.stderr}".lower()
+            if any(token in combined for token in ("permission", "approval", "approve", "not allowed")):
+                result.metadata["permission_required"] = True
+                result.error = truncate(
+                    "OpenCode yêu cầu phê duyệt; Trinity không dùng --auto. "
+                    + (result.error or "kiểm tra permission của agent OpenCode"),
+                    2000,
+                )
+        return result
+
+    @staticmethod
+    def _json_valid(text: str) -> bool:
+        payload = (text or "").strip()
+        if not payload:
+            return False
+        try:
+            json.loads(payload)
+            return True
+        except (TypeError, json.JSONDecodeError):
+            pass
+        lines = [line for line in payload.splitlines() if line.strip()]
+        if not lines:
+            return False
+        try:
+            for line in lines:
+                json.loads(line)
+            return True
+        except (TypeError, json.JSONDecodeError):
+            return False

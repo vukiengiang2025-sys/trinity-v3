@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trinity-orchestrator"
-version = "3.0.0"
-description = "TRINITY v3.0 - Lightweight AI Agent Orchestrator with BRAIN/LOGIC/MUSCLE adapters"
+version = "3.1.0"
+description = "TRINITY v3.1 - Lightweight AI Agent Orchestrator with BRAIN/LOGIC/MUSCLE adapters"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

@@ -1,4 +1,4 @@
-# SECURITY — TRINITY v3.0
+# SECURITY — TRINITY v3.1
 
 ## 1. Mô hình mối đe dọa
 
@@ -75,8 +75,11 @@ Chặn vĩnh viễn:
 - Router trả `risk_level` và `approval_required` (tham khảo).
 - Executor kiểm tra lại `guard.require_approval_for_risk`; **không tin router**.
 - Risk cao nhưng thiếu `--approve` → `WAITING_APPROVAL`, không chạy adapter.
-- `--approve` chỉ mở cổng approval; guard vẫn có thể deny lệnh.
+- `--approve` chỉ mở cổng approval; guard vẫn có thể deny lệnh. Nó **không** biến thao tác nguy hiểm thành an toàn.
 - OpenClaw adapter yêu cầu `request.approved` cho lệnh risk cao và vẫn kiểm tra allowlist riêng.
+- `resume` dùng Task ID cũ; không tạo task trùng. `claim_for_resume` là UPDATE có điều kiện `WHERE status='WAITING_APPROVAL'`, lưu `approved_by`, `approved_at`, `approval_scope` (hash plan), `resume_count`.
+- Resume re-check profile, workspace đã lưu, Guard, Resource và adapter availability. Nếu chưa đủ điều kiện, task vẫn `WAITING_APPROVAL`.
+- Task v3.0 thiếu `plan_json`/`workspace` bị từ chối resume thay vì đoán.
 
 ### 3.5 Tài nguyên
 
@@ -84,6 +87,7 @@ Chặn vĩnh viễn:
 - Không đọc được RAM → unknown + cảnh báo, không giả định 0.
 - Ngưỡng riêng Linux/Termux.
 - Một lock `fcntl` duy nhất; không chạy đồng thời.
+- **Fail closed**: nếu `fcntl` thiếu, không phải POSIX, hoặc filesystem không hỗ trợ flock (shared storage Android), Trinity từ chối chạy. Không fallback sang chạy không khóa.
 - Timeout bị clamp theo profile; process tree bị kill khi quá hạn.
 - Output giới hạn để tránh flood bộ nhớ/DB.
 
@@ -112,6 +116,8 @@ Chặn vĩnh viễn:
 - Không tạo memory directory.
 - Không tự cài/gỡ/nâng cấp công cụ.
 - Không sửa cấu hình OpenCode global.
+- OpenCode **không dùng agent mặc định**: `agent: null` + `require_explicit_agent: true` → `DENIED`. Chỉ bật agent sau khi operator đọc permission bằng `opencode debug agents`.
+- Error permission/approval từ OpenCode được đánh dấu `permission_required`; Trinity không dùng `--auto`.
 
 ## 4. Những gì Guard KHÔNG bảo vệ
 
@@ -127,6 +133,24 @@ Chặn vĩnh viễn:
 8. **Termux shared storage.** Quyền `0600` có thể không được honor trên một số filesystem dùng chung (FAT/exFAT). Ưu tiên bộ nhớ riêng của Termux.
 9. **Full environment inheritance.** Adapter con nhận `os.environ` để hoạt động với cấu hình hiện có; Trinity không log/đọc giá trị, nhưng agent con có thể thấy biến môi trường của tiến trình cha.
 10. **Không chống prompt injection từ nội dung file.** Nếu OpenCode đọc file độc hại, hành vi của nó do OpenCode quyết định.
+11. **Không có built-in OpenCode agent read-only hoàn chỉnh.** `plan` deny edit nhưng wildcard vẫn cho shell; `architect` deny edit nhưng cho read/glob/grep/webfetch và shell Git read-only. Vì vậy không chạy prompt thật khi chưa có permission boundary đã chứng minh.
+12. **Prompt resume lấy từ bản đã redact.** Nếu prompt ban đầu chứa secret, task resume sẽ dùng bản đã redact; đây là đánh đổi có chủ đích để không lưu secrets.
+
+## 4.1 Findings v3.1
+
+| Mức | Finding | Trạng thái |
+|---|---|---|
+| High | OpenCode có thể chạy shell/edit theo permission nội bộ; Guard không sandbox | **Chấp nhận là giới hạn kiến trúc**; default agent bị chặn |
+| High | Không có OpenCode agent built-in vừa deny edit vừa deny shell | **Chưa chạy prompt thật**; chỉ fake-CLI test |
+| Medium | Lock có thể fail-open nếu fcntl/FS không hỗ trợ | **Đã sửa**: fail closed + test |
+| Medium | Resume tạo task mới, mất plan/approval history | **Đã sửa**: resume cùng Task ID, plan, scope |
+| Medium | Hai tiến trình có thể resume cùng task | **Đã sửa**: conditional claim + lock + test |
+| Medium | OpenCode default agent có quyền rộng | **Đã sửa**: yêu cầu `agent` tường minh |
+| Low | JSON output chưa được kiểm tra hợp lệ | **Đã bổ sung** metadata `json_valid` |
+| Low | Lỗi permission OpenCode không được phân loại | **Đã bổ sung** `permission_required` |
+| Low | Chưa có migration DB v3.0 → v3.1 | **Đã sửa**: ALTER TABLE + test |
+
+Residual risk: `--approve` + OpenCode agent có shell/edit vẫn có thể thay đổi ngoài workspace. Chỉ dùng agent đã kiểm tra permission và workspace tin cậy.
 
 ## 5. Quy tắc vận hành
 
@@ -152,7 +176,12 @@ Xem `docs/TEST_REPORT.md`. Các test bao gồm:
 - Redaction prompt/result/error/event/audit.
 - DB/audit permission `0600`.
 - Adapter thiếu tool → UNAVAILABLE; OpenClaw thiếu guard/approval → DENIED.
-- Dry-run không tạo DB/audit.
+- OpenCode thiếu agent tường minh → DENIED; permission error được đánh dấu.
+- Resume cùng Task ID, lưu approval scope, atomic claim, chống chạy trùng.
+- Resume sai profile/workspace/plan bị từ chối.
+- `fcntl` không hỗ trợ/non-POSIX → fail closed.
+- Migration DB v3.0 → v3.1.
+- Dry-run không tạo DB/audit; resume dry-run không đổi task.
 
 ## 7. Báo cáo sự cố
 

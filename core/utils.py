@@ -249,21 +249,29 @@ class FileLock:
         self.path = Path(path)
         self.timeout = timeout
         self._handle = None
+        self.error = ""
 
     def acquire(self) -> bool:
+        self.error = ""
         if os.name != "posix":  # pragma: no cover - target is Linux/Termux
-            return True
+            self.error = "fcntl chỉ hỗ trợ POSIX; từ chối chạy không có khóa"
+            return False
         try:
             import fcntl
         except ImportError:  # pragma: no cover
-            return True
+            self.error = "không import được fcntl; từ chối chạy không có khóa"
+            return False
 
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
             os.chmod(self.path.parent, 0o700)
         except OSError:
             pass
-        handle = open(self.path, "a+", encoding="utf-8")
+        try:
+            handle = open(self.path, "a+", encoding="utf-8")
+        except OSError as exc:
+            self.error = f"không mở được lock file {self.path}: {exc}"
+            return False
         deadline = time.monotonic() + max(0.0, self.timeout)
         while True:
             try:
@@ -276,9 +284,19 @@ class FileLock:
                 return True
             except BlockingIOError:
                 if time.monotonic() >= deadline:
+                    self.error = "đang có tác vụ khác giữ lock"
                     handle.close()
                     return False
                 time.sleep(0.05)
+            except OSError as exc:
+                # Filesystem không hỗ trợ flock (ví dụ shared storage trên Android).
+                # Fail closed thay vì chạy không có khóa tuần tự.
+                self.error = f"filesystem không hỗ trợ khóa fcntl: {exc}"
+                try:
+                    handle.close()
+                except OSError:
+                    pass
+                return False
 
     def release(self) -> None:
         if self._handle is None:

@@ -1,4 +1,4 @@
-# ARCHITECTURE — TRINITY v3.0
+# ARCHITECTURE — TRINITY v3.1
 
 ## 1. Mục tiêu thiết kế
 
@@ -118,6 +118,7 @@ Guard không phải sandbox. Nó không thể ngăn một interpreter được a
 - `on_low_memory: deny|warn`.
 - Timeout clamp theo profile (`default_timeout_seconds`, `max_timeout_seconds`).
 - Khóa tuần tự bằng `fcntl.flock` tại `logs/.trinity.lock`, non-blocking; task thứ hai fail ngay.
+- Lock **fail closed**: nếu `fcntl` không khả dụng, non-POSIX, hoặc filesystem không hỗ trợ flock (shared storage Android), Trinity từ chối chạy thay vì chạy không khóa.
 
 ### 3.5 Executor — `core/executor.py`
 
@@ -134,6 +135,19 @@ Luồng `run` thật:
 
 Không có thread pool, không chạy song song, không retry vô hạn.
 
+Luồng `resume` (v3.1):
+
+1. Đọc task theo Task ID; chỉ chấp nhận `WAITING_APPROVAL`.
+2. Kiểm tra profile, workspace đã lưu, `plan_json` và prompt đã lưu.
+3. Re-check Guard workspace, Resource, adapter availability.
+4. Không có `--approve` → chỉ in kế hoạch, không ghi.
+5. Acquire lock; `claim_for_resume()` UPDATE có điều kiện `WHERE status='WAITING_APPROVAL'`.
+6. Lưu `approved_by`, `approved_at`, `approval_scope`, tăng `resume_count`.
+7. Chạy đúng plan cũ; nếu adapter/resource/lock chưa sẵn sàng, giữ `WAITING_APPROVAL`.
+8. Nếu đã claim mà execution fail → `FAILED`, không chạy lại trùng.
+
+Ở trạng thái `WAITING_APPROVAL`, chưa có bước nào được thực thi, nên resume không chạy lại bước đã hoàn thành. Task v3.0 thiếu plan/workspace bị từ chối resume thay vì đoán.
+
 ### 3.6 Storage — `storage/memory.py` và `core/task.py`
 
 `core/task.py` là facade công khai; implementation SQLite nằm trong `storage/memory.py`.
@@ -147,7 +161,10 @@ tasks(
   task_type TEXT, status TEXT,
   adapter TEXT, risk_level TEXT, profile TEXT,
   prompt TEXT, result TEXT, error TEXT,
-  dry_run INTEGER
+  dry_run INTEGER,
+  plan_json TEXT, workspace TEXT,
+  approved_by TEXT, approved_at TEXT,
+  approval_scope TEXT, resume_count INTEGER
 )
 
 task_events(
@@ -162,14 +179,18 @@ Trạng thái và transition:
 ```text
 PENDING ──► RUNNING ──► COMPLETED
    │           └─────► FAILED
-   ├─────► WAITING_APPROVAL ──► CANCELLED / FAILED
+   ├─────► WAITING_APPROVAL ──► RUNNING (resume) ──► COMPLETED / FAILED
+   │                         └──► CANCELLED / FAILED
    └─────► FAILED / CANCELLED
 ```
 
 - Task ID: `TRN-YYYYMMDD-HHMMSS-<6 hex>`.
 - Không có cột cho API key/token/password.
+- `plan_json`/`workspace` được lưu khi tạo task để resume đúng plan và đúng workspace.
+- `claim_for_resume` là barrier chống chạy trùng; `resume_count` tăng đúng một lần.
 - Mọi text được `truncate()` (redact + giới hạn ký tự) trước khi ghi.
 - DB `0600`, thư mục `0700`; audit JSONL `0600`.
+- Schema v3.1 có migration `ALTER TABLE` cho DB v3.0; `PRAGMA user_version = 2`.
 
 ### 3.7 Adapter contract — `adapters/base.py`
 
@@ -190,6 +211,13 @@ class BaseAdapter:
 - Timeout bắt buộc, output redacted, duration.
 
 Mọi subprocess dùng `run_process(argv, timeout, ...)`: `shell=False`, `start_new_session=True`, kill process group khi timeout, giới hạn output.
+
+OpenCode adapter có thêm policy riêng (v3.1):
+
+- `require_explicit_agent: true` + `agent: null` → `DENIED`, không dùng agent mặc định.
+- Chỉ operator đặt `agent` sau khi kiểm tra `opencode debug agents`.
+- Output JSON được kiểm tra hợp lệ (`json_valid`); lỗi permission được đánh dấu `permission_required`.
+- Không truyền `--auto`.
 
 ## 4. Luồng dữ liệu
 
@@ -241,6 +269,8 @@ Không sửa executor để biết chi tiết CLI của agent mới; toàn bộ 
 - Chưa có HTTP execution adapter cho OpenCode (auth/endpoint chưa xác minh).
 - OpenClaw natural-language execution chưa hỗ trợ; cần argv tường minh và `invoke_prefix` đã xác minh.
 - Hermes cần command template do operator cấu hình; không đoán CLI.
-- Chưa kiểm thử trên thiết bị Termux thật; profile Termux mới được test ở mức logic/cấu hình.
+- Chưa kiểm thử trên thiết bị Termux thật; profile Termux mới được test ở mức logic/cấu hình. Xem `docs/TERMUX_COMPATIBILITY.md`.
 - Không có retry/queue dài hạn; mỗi `run` là một task tuần tự.
-- Task `WAITING_APPROVAL` không tự resume; người dùng chạy lại với `--approve` (task mới).
+- Task `WAITING_APPROVAL` chỉ resume được nếu còn `plan_json`/`workspace`; task v3.0 cũ bị từ chối.
+- OpenCode execution mặc định fail closed nếu chưa cấu hình `agent`; không có agent built-in nào vừa deny edit vừa deny shell.
+- Guard không kiểm soát công cụ nội bộ của OpenCode sau khi tiến trình được khởi chạy.

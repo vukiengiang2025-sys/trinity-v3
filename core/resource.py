@@ -158,9 +158,9 @@ class ResourceGuard:
     def acquire_lock(self, timeout: float = 0.0) -> FileLock:
         lock = FileLock(self.config.lock_path, timeout=timeout)
         if not lock.acquire():
+            detail = lock.error or "đang có tác vụ khác chạy"
             raise ResourceError(
-                "đang có tác vụ khác chạy; Trinity chỉ chạy tuần tự. "
-                f"Lock: {self.config.lock_path}"
+                f"{detail}; Trinity chỉ chạy tuần tự. Lock: {self.config.lock_path}"
             )
         return lock
 

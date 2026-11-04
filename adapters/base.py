@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 import urllib.error
 import urllib.request
@@ -127,6 +127,18 @@ class BaseAdapter(ABC):
 
     def is_available(self) -> bool:
         return self.discover().status == AdapterStatus.AVAILABLE
+
+    def execution_ready(self) -> Tuple[bool, str]:
+        """Return whether a real task may be dispatched to this adapter.
+
+        Adapters override this when discovery alone is not enough (for example
+        OpenCode requires an explicitly configured agent).
+        """
+
+        health = self.discover(force=True)
+        if health.status != AdapterStatus.AVAILABLE:
+            return False, health.detail or "adapter không khả dụng"
+        return True, ""
 
     def settings(self) -> Dict[str, Any]:
         return self.config.adapter(self.name)

@@ -55,7 +55,9 @@ adapters:
     timeout_seconds: 600
     format: json
     model: null
+    # Bắt buộc chọn agent đã kiểm tra permission trước khi execute.
     agent: null
+    require_explicit_agent: true
 
   hermes:
     enabled: true

@@ -23,6 +23,7 @@ CANCELLED = "CANCELLED"
 
 STATUSES = (PENDING, RUNNING, WAITING_APPROVAL, COMPLETED, FAILED, CANCELLED)
 TERMINAL_STATUSES = {COMPLETED, FAILED, CANCELLED}
+SCHEMA_VERSION = 2
 ALLOWED_TRANSITIONS = {
     PENDING: {RUNNING, WAITING_APPROVAL, FAILED, CANCELLED},
     WAITING_APPROVAL: {RUNNING, FAILED, CANCELLED},
@@ -45,7 +46,13 @@ CREATE TABLE IF NOT EXISTS tasks (
     prompt TEXT NOT NULL,
     result TEXT NOT NULL DEFAULT '',
     error TEXT NOT NULL DEFAULT '',
-    dry_run INTEGER NOT NULL DEFAULT 0
+    dry_run INTEGER NOT NULL DEFAULT 0,
+    plan_json TEXT NOT NULL DEFAULT '',
+    workspace TEXT NOT NULL DEFAULT '',
+    approved_by TEXT NOT NULL DEFAULT '',
+    approved_at TEXT NOT NULL DEFAULT '',
+    approval_scope TEXT NOT NULL DEFAULT '',
+    resume_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS task_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +66,26 @@ CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_events_task ON task_events(task_id, id);
 """
+
+# Columns added in v3.1.  They are also applied to existing v3.0 databases.
+MIGRATION_COLUMNS = {
+    "plan_json": "TEXT NOT NULL DEFAULT ''",
+    "workspace": "TEXT NOT NULL DEFAULT ''",
+    "approved_by": "TEXT NOT NULL DEFAULT ''",
+    "approved_at": "TEXT NOT NULL DEFAULT ''",
+    "approval_scope": "TEXT NOT NULL DEFAULT ''",
+    "resume_count": "INTEGER NOT NULL DEFAULT 0",
+}
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(SCHEMA)
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
+    for name, ddl in MIGRATION_COLUMNS.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE tasks ADD COLUMN {name} {ddl}")
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    conn.commit()
 
 
 def _secure_dir(path: Path) -> None:
@@ -91,8 +118,7 @@ class TaskManager:
         if self._conn is not None:
             if create:
                 try:
-                    self._conn.executescript(SCHEMA)
-                    self._conn.commit()
+                    _ensure_schema(self._conn)
                 except sqlite3.Error as exc:
                     raise StorageError(f"không tạo được schema SQLite: {exc}") from exc
             return self._conn
@@ -118,8 +144,7 @@ class TaskManager:
         self._conn = conn
         if create:
             try:
-                conn.executescript(SCHEMA)
-                conn.commit()
+                _ensure_schema(conn)
             except sqlite3.Error as exc:
                 raise StorageError(f"không tạo được schema SQLite: {exc}") from exc
         else:
@@ -160,6 +185,8 @@ class TaskManager:
         status: str = PENDING,
         dry_run: bool = False,
         error: str = "",
+        plan_json: str = "",
+        workspace: str = "",
     ) -> Dict[str, Any]:
         if not task_id or not str(task_id).strip():
             raise StorageError("Task ID không được rỗng")
@@ -173,8 +200,9 @@ class TaskManager:
                 """
                 INSERT INTO tasks
                     (id, created_at, updated_at, task_type, status, adapter,
-                     risk_level, profile, prompt, result, error, dry_run)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+                     risk_level, profile, prompt, result, error, dry_run,
+                     plan_json, workspace)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?)
                 """,
                 (
                     str(task_id),
@@ -188,6 +216,8 @@ class TaskManager:
                     truncate(prompt, self.max_result_chars),
                     truncate(error, self.max_result_chars),
                     1 if dry_run else 0,
+                    truncate(plan_json, 10_000),
+                    truncate(workspace, 2000),
                 ),
             )
             conn.execute(
@@ -264,6 +294,62 @@ class TaskManager:
     def cancel_task(self, task_id: str) -> Dict[str, Any]:
         return self.update_status(task_id, CANCELLED, error="người dùng hủy tác vụ")
 
+    def claim_for_resume(self, task_id: str, approver: str, scope: str) -> Dict[str, Any]:
+        """Atomically claim a WAITING_APPROVAL task for exactly one runner.
+
+        The conditional UPDATE is the duplicate-execution barrier: only one
+        process can move WAITING_APPROVAL -> RUNNING for a given task.
+        """
+
+        if self.db_path != ":memory:" and not Path(self.db_path).exists():
+            raise StorageError(f"không tìm thấy task: {task_id}")
+        conn = self._connect(create=True)
+        if conn is None:
+            raise StorageError(f"không tìm thấy task: {task_id}")
+        now = utc_now()
+        safe_actor = truncate(approver or "unknown", 200)
+        safe_scope = truncate(scope, 500)
+        try:
+            cursor = conn.execute(
+                """
+                UPDATE tasks
+                   SET status = ?, updated_at = ?, approved_by = ?, approved_at = ?,
+                       approval_scope = ?, resume_count = resume_count + 1
+                 WHERE id = ? AND status = ?
+                """,
+                (RUNNING, now, safe_actor, now, safe_scope, str(task_id), WAITING_APPROVAL),
+            )
+            if cursor.rowcount != 1:
+                row = conn.execute("SELECT status FROM tasks WHERE id = ?", (str(task_id),)).fetchone()
+                current = row["status"] if row else "missing"
+                raise StorageError(
+                    f"không thể resume task {task_id}: trạng thái hiện tại là {current}"
+                )
+            conn.execute(
+                "INSERT INTO task_events (task_id, created_at, kind, message) VALUES (?, ?, ?, ?)",
+                (
+                    str(task_id),
+                    now,
+                    "approval",
+                    truncate(f"{safe_actor} phê duyệt resume; scope={safe_scope}", 2000),
+                ),
+            )
+            conn.execute(
+                "INSERT INTO task_events (task_id, created_at, kind, message) VALUES (?, ?, ?, ?)",
+                (str(task_id), now, "status", f"{WAITING_APPROVAL} -> {RUNNING} (resume)"),
+            )
+            conn.commit()
+        except StorageError:
+            conn.rollback()
+            raise
+        except sqlite3.Error as exc:
+            conn.rollback()
+            raise StorageError(f"không claim được task để resume: {exc}") from exc
+        task = self.get_task(str(task_id))
+        if task is None:
+            raise StorageError("không đọc lại được task sau khi claim")
+        return task
+
     # ------------------------------------------------------------------
     # Reads
     # ------------------------------------------------------------------
@@ -279,6 +365,15 @@ class TaskManager:
             return None
         task = dict(row)
         task["dry_run"] = bool(task.get("dry_run"))
+        for key, default in (
+            ("plan_json", ""),
+            ("workspace", ""),
+            ("approved_by", ""),
+            ("approved_at", ""),
+            ("approval_scope", ""),
+            ("resume_count", 0),
+        ):
+            task.setdefault(key, default)
         try:
             events = conn.execute(
                 "SELECT created_at, kind, message FROM task_events WHERE task_id = ? ORDER BY id",

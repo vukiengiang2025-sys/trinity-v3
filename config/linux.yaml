@@ -59,7 +59,10 @@ adapters:
     format: json
     # null = dùng cấu hình model hiện có của OpenCode, không ghi đè.
     model: null
+    # Bắt buộc chọn agent đã kiểm tra permission trước khi execute.
+    # null + require_explicit_agent: true => fail closed, chỉ dry-run được.
     agent: null
+    require_explicit_agent: true
 
   hermes:
     enabled: true

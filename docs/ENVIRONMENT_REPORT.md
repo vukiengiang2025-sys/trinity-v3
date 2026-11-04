@@ -1,4 +1,4 @@
-# ENVIRONMENT REPORT — TRINITY v3.0
+# ENVIRONMENT REPORT — TRINITY v3.1
 
 - **Ngày kiểm tra:** 2026-11-04
 - **Mục đích:** xác minh môi trường thật trước khi triển khai, không suy luận từ sự tồn tại của executable.
@@ -53,9 +53,10 @@ Ghi chú: credential chỉ được đọc transient qua Git credential helper �
 | `GET /api/health` | HTTP 401 | Cần auth — chưa xác minh |
 | `GET /openapi.json` | HTTP 401 | Cần auth — chưa xác minh |
 | HTTP execution endpoint | Chưa xác minh compatibility/auth | **UNVERIFIED** |
-| Actual prompt run | Không chạy để tránh tạo session/chi phí | **NOT VERIFIED** |
+| Actual prompt run | Không chạy: không có agent built-in vừa deny edit vừa deny shell | **NOT VERIFIED** |
+| Permission audit | `opencode debug agents`: `build`/`general` wildcard allow; `plan` edit-deny nhưng shell qua wildcard; `architect` edit-deny, shell Git read-only, read/webfetch | **UNVERIFIED for unattended use** |
 
-Quyết định: adapter dùng CLI subprocess (`mode: cli`), không dùng HTTP execution. Không sửa `opencode.json/jsonc`, provider, model, MCP, plugin hoặc skills. Không truyền `--auto`.
+Quyết định: adapter dùng CLI subprocess (`mode: cli`), không dùng HTTP execution. Không sửa `opencode.json/jsonc`, provider, model, MCP, plugin hoặc skills. Không truyền `--auto`. v3.1 bắt buộc `adapters.opencode.agent` tường minh; thiếu agent → `DENIED`.
 
 ## 5. Hermes — BRAIN
 
@@ -84,13 +85,14 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 | Kiểm tra | Kết quả |
 |---|---|
 | `python3 -m compileall` | PASS |
-| `python3 trinity.py version` | PASS — `Trinity v3.0.0` |
+| `python3 trinity.py version` | PASS — `Trinity v3.1.0` |
 | `python3 trinity.py config` | PASS — profile linux, không secrets |
 | `python3 trinity.py --profile termux config` | PASS — profile termux, ngưỡng RAM 192 MB |
 | `python3 trinity.py status` | PASS — hiển thị 3 adapter |
-| `python3 trinity.py doctor` | PASS — 0 FAIL, 2 WARN (Hermes/OpenClaw unavailable) |
+| `python3 trinity.py doctor` | PASS — 0 FAIL, 3 WARN (Hermes/OpenClaw unavailable; OpenCode chưa cấu hình agent) |
 | `python3 trinity.py run --dry-run "..."` | PASS — không tạo DB/audit |
-| Unit/integration tests | PASS — 115 test, 0 failure, 0 error |
+| Unit/integration tests v3.1 | PASS — 139 test, 0 failure, 0 error |
+| GitHub Actions | PASS — Python 3.9 và 3.12 tại commit v3.0 |
 
 ## 8. Phân loại tổng hợp
 
@@ -110,7 +112,17 @@ Adapter trả `UNAVAILABLE`; không tự khởi động gateway, không cấp qu
 - Termux runtime (host hiện tại là Linux Mint).
 - GitHub CLI (`gh`) — không cần cho build vì dùng API/credential helper.
 
-## 9. Giới hạn của báo cáo
+## 9. Cập nhật kiểm định v3.1
+
+- CI v3.0: **success** cho cả `unittest (3.9)` và `unittest (3.12)`.
+- Bộ test v3.1: **139 test**, 0 failure, 0 error.
+- Lock `fcntl`: phát hiện khả năng fail-open; đã sửa thành **fail closed** khi thiếu fcntl/non-POSIX/filesystem không hỗ trợ.
+- Task resume: đã triển khai cùng Task ID, plan JSON, approval actor/time/scope, atomic claim.
+- OpenCode: mặc định không dùng agent built-in; thiếu `agent` cấu hình → `DENIED`.
+- OpenCode prompt thật vẫn **không chạy** vì chưa có agent vừa deny edit vừa deny shell.
+- Termux: mới kiểm thử mô phỏng, chưa chạy trên Redmi 15 5G.
+
+## 10. Giới hạn của báo cáo
 
 - Không kiểm chứng được hành vi thực tế của Hermes/OpenClaw vì công cụ không tồn tại trên máy.
 - Không chạy prompt thật qua OpenCode để tránh tạo session và chi phí; chỉ xác minh CLI/help và kiểm thử adapter bằng fake executable.

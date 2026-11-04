@@ -33,6 +33,20 @@ class ResourceTests(unittest.TestCase):
         self.assertIsNone(snapshot.available_mb)
         self.assertIsNone(snapshot.total_mb)
 
+    def test_sysconf_fallback_when_proc_meminfo_unavailable(self):
+        values = {
+            "SC_PAGE_SIZE": 4096,
+            "SC_PHYS_PAGES": 1_000_000,
+            "SC_AVPHYS_PAGES": 500_000,
+        }
+        with mock.patch("builtins.open", side_effect=OSError("no /proc")):
+            with mock.patch("os.sysconf", side_effect=lambda name: values[name]):
+                snapshot = read_memory()
+        self.assertTrue(snapshot.readable)
+        self.assertEqual(snapshot.source, "sysconf")
+        self.assertIsNotNone(snapshot.available_mb)
+        self.assertGreater(snapshot.available_mb, 0)
+
     def test_unreadable_ram_continues_with_warning(self):
         unknown = ResourceSnapshot(None, None, False, "unreadable")
         with mock.patch("core.resource.read_memory", return_value=unknown):

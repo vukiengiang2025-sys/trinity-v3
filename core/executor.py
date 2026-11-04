@@ -7,7 +7,12 @@ result.  Steps are executed one at a time, never in parallel.
 
 from __future__ import annotations
 
+import getpass
+import hashlib
+import json
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.config import AppConfig
@@ -117,7 +122,7 @@ class Executor:
             task = self.task_manager.update_status(
                 route.task_id,
                 WAITING_APPROVAL,
-                error=f"cần phê duyệt cho mức rủi ro {route.risk_level}; chạy lại với --approve",
+                error=f"cần phê duyệt cho mức rủi ro {route.risk_level}; dùng resume --approve",
             )
             self._audit("approval_required", route.task_id, {"risk": route.risk_level, "task_type": route.task_type})
             return ExecutionOutcome(
@@ -125,7 +130,7 @@ class Executor:
                 status=WAITING_APPROVAL,
                 message=(
                     f"Tác vụ rủi ro {route.risk_level} cần phê duyệt. "
-                    f"Chạy lại với --approve nếu bạn đã kiểm tra kế hoạch."
+                    f"Dùng: python3 trinity.py resume {route.task_id} --approve"
                 ),
                 route=route,
                 approval_required=True,
@@ -200,6 +205,265 @@ class Executor:
         finally:
             if lock is not None:
                 lock.release()
+
+    # ------------------------------------------------------------------
+    def resume(
+        self,
+        task_id: str,
+        approve: bool = False,
+        timeout: Optional[int] = None,
+        dry_run: bool = False,
+        approver: Optional[str] = None,
+    ) -> ExecutionOutcome:
+        """Resume an existing WAITING_APPROVAL task without creating a new one.
+
+        The original plan and Task ID are reused.  Approval is explicit, the
+        current workspace/profile/resources are re-checked, and a conditional
+        SQLite claim prevents two runners from executing the same task.
+        """
+
+        task = self.task_manager.get_task(task_id)
+        if task is None:
+            raise TrinityError(f"không tìm thấy task: {task_id}")
+        status = str(task.get("status", ""))
+        if status != WAITING_APPROVAL:
+            raise TrinityError(
+                f"chỉ resume được task WAITING_APPROVAL; task {task_id} đang {status}"
+            )
+        if str(task.get("profile", "")) != self.config.profile:
+            raise TrinityError(
+                f"profile của task ({task.get('profile')}) khác profile hiện tại ({self.config.profile})"
+            )
+
+        stored_workspace = str(task.get("workspace", "")).strip()
+        if not stored_workspace:
+            raise TrinityError("task v3.0 không lưu workspace; không thể resume an toàn")
+        try:
+            workspace = Path(stored_workspace).expanduser().resolve()
+        except (OSError, RuntimeError) as exc:
+            raise TrinityError(f"workspace của task không hợp lệ: {exc}") from exc
+        if workspace != self.config.workspace_root:
+            raise TrinityError(
+                f"workspace của task ({workspace}) khác workspace hiện tại ({self.config.workspace_root})"
+            )
+
+        plan = self._load_plan(task)
+        prompt = str(task.get("prompt", ""))
+        if not prompt.strip():
+            raise TrinityError("task không có prompt; không thể resume an toàn")
+
+        route = Route(
+            task_id=task_id,
+            task_type=str(task.get("task_type", "GENERAL")),
+            selected_adapter=str(task.get("adapter", "opencode")),
+            execution_plan=plan,
+            risk_level=str(task.get("risk_level", "high")),
+            matched_rules=["resume"],
+            approval_required=True,
+            raw_prompt=prompt,
+        )
+
+        guard_decision = self.guard.check_path(self.config.workspace_root, write=True)
+        if not guard_decision.allowed:
+            message = f"Guard từ chối workspace khi resume: {guard_decision.reason}"
+            if dry_run:
+                return ExecutionOutcome(
+                    task_id=task_id,
+                    status="DRY_RUN",
+                    message=message,
+                    route=route,
+                    dry_run=True,
+                    approval_required=True,
+                    task=task,
+                )
+            return self._resume_blocked(task_id, route, task, message)
+
+        if dry_run:
+            resource = self.resource.preflight(dry_run=True)
+            return ExecutionOutcome(
+                task_id=task_id,
+                status="DRY_RUN",
+                message="DRY-RUN resume: kế hoạch cũ được kiểm tra, không ghi dữ liệu và không chạy adapter",
+                route=route,
+                dry_run=True,
+                approval_required=True,
+                task=task,
+                resource=resource,
+            )
+
+        if not approve:
+            return ExecutionOutcome(
+                task_id=task_id,
+                status=WAITING_APPROVAL,
+                message=f"Resume cần phê duyệt rõ ràng: python3 trinity.py resume {task_id} --approve",
+                route=route,
+                approval_required=True,
+                task=task,
+            )
+
+        resource = self.resource.preflight(dry_run=False)
+        if not resource.allowed:
+            return self._resume_blocked(
+                task_id,
+                route,
+                task,
+                f"Resource Guard từ chối resume: {resource.reason}",
+                resource=resource,
+            )
+
+        for step in plan:
+            adapter_name = step.get("adapter", "")
+            adapter = self.adapters.get(adapter_name)
+            if adapter is None:
+                raise TrinityError(f"không có adapter {adapter_name!r} để resume")
+            try:
+                ready, detail = adapter.execution_ready()
+            except Exception as exc:
+                raise TrinityError(f"không kiểm tra được adapter {adapter_name}: {exc}") from exc
+            if not ready:
+                return self._resume_blocked(
+                    task_id,
+                    route,
+                    task,
+                    f"Adapter {adapter_name} chưa sẵn sàng: {detail or 'không khả dụng'}. "
+                    "Task vẫn WAITING_APPROVAL.",
+                    resource=resource,
+                )
+
+        try:
+            lock = self.resource.acquire_lock(timeout=0)
+        except TrinityError as exc:
+            return self._resume_blocked(
+                task_id,
+                route,
+                task,
+                f"Không thể resume: {exc}",
+                resource=resource,
+            )
+
+        steps: List[StepReport] = []
+        claimed = False
+        try:
+            actor = approver or self._current_actor()
+            scope = self._approval_scope(route)
+            task = self.task_manager.claim_for_resume(task_id, actor, scope)
+            claimed = True
+            self._audit("resume_started", task_id, {"actor": actor, "scope": scope})
+            task = self._run_plan(route, prompt, steps, timeout, True)
+            if task["status"] == COMPLETED:
+                self._audit("task_completed", task_id, {"steps": len(steps), "resumed": True})
+                message = f"Hoàn thành resume {len(steps)} bước tuần tự."
+            else:
+                self._audit("task_failed", task_id, {"error": task.get("error", ""), "resumed": True})
+                message = task.get("error", "tác vụ resume thất bại")
+            return ExecutionOutcome(
+                task_id=task_id,
+                status=task["status"],
+                message=message,
+                route=route,
+                approval_required=True,
+                task=task,
+                resource=resource,
+                steps=steps,
+            )
+        except Exception as exc:
+            error = truncate(f"lỗi resume: {exc}", 2000)
+            if claimed:
+                task = self._mark_failed(task_id, error)
+                self._audit("task_failed", task_id, {"error": error, "resumed": True})
+                return ExecutionOutcome(
+                    task_id=task_id,
+                    status=FAILED,
+                    message=error,
+                    route=route,
+                    approval_required=True,
+                    task=task,
+                    resource=resource,
+                    steps=steps,
+                )
+            current = self.task_manager.get_task(task_id)
+            current_status = (current or {}).get("status", WAITING_APPROVAL)
+            return ExecutionOutcome(
+                task_id=task_id,
+                status=current_status,
+                message=f"Không claim được task để resume: {error}",
+                route=route,
+                approval_required=True,
+                task=current,
+                resource=resource,
+                steps=steps,
+            )
+        finally:
+            lock.release()
+
+    def _resume_blocked(
+        self,
+        task_id: str,
+        route: Route,
+        task: Optional[Dict[str, Any]],
+        message: str,
+        resource: Optional[ResourceDecision] = None,
+    ) -> ExecutionOutcome:
+        try:
+            self.task_manager.add_event(task_id, "resume_blocked", message)
+        except Exception:
+            pass
+        self._audit("resume_blocked", task_id, {"reason": message})
+        return ExecutionOutcome(
+            task_id=task_id,
+            status=WAITING_APPROVAL,
+            message=message,
+            route=route,
+            approval_required=True,
+            task=task,
+            resource=resource,
+        )
+
+    @staticmethod
+    def _load_plan(task: Dict[str, Any]) -> List[Dict[str, str]]:
+        raw = str(task.get("plan_json", "") or "")
+        if not raw.strip():
+            raise TrinityError("task không có execution_plan đã lưu; không thể resume an toàn")
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise TrinityError(f"execution_plan đã lưu không phải JSON hợp lệ: {exc}") from exc
+        if not isinstance(data, list) or not data:
+            raise TrinityError("execution_plan đã lưu rỗng hoặc sai định dạng")
+        if len(data) > 10:
+            raise TrinityError("execution_plan đã lưu vượt giới hạn 10 bước")
+        plan: List[Dict[str, str]] = []
+        for index, step in enumerate(data, start=1):
+            if not isinstance(step, dict):
+                raise TrinityError(f"bước {index} trong plan không phải object")
+            adapter_name = str(step.get("adapter", "")).strip()
+            action = str(step.get("action", "")).strip()
+            if not adapter_name or not action:
+                raise TrinityError(f"bước {index} thiếu adapter/action")
+            plan.append({str(key): str(value) for key, value in step.items()})
+        return plan
+
+    def _approval_scope(self, route: Route) -> str:
+        payload = json.dumps(
+            {
+                "task_id": route.task_id,
+                "profile": self.config.profile,
+                "workspace": str(self.config.workspace_root),
+                "risk": route.risk_level,
+                "plan": route.execution_plan,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+        return f"task={route.task_id}; profile={self.config.profile}; risk={route.risk_level}; plan_sha256={digest}"
+
+    @staticmethod
+    def _current_actor() -> str:
+        try:
+            return getpass.getuser()
+        except Exception:
+            return os.environ.get("USER", "unknown")
 
     # ------------------------------------------------------------------
     def _run_plan(
@@ -311,6 +575,8 @@ class Executor:
             risk_level=route.risk_level,
             profile=self.config.profile,
             status=status,
+            plan_json=json.dumps(route.execution_plan, ensure_ascii=False, sort_keys=True),
+            workspace=str(self.config.workspace_root),
         )
 
     def _mark_failed(self, task_id: str, error: str) -> Dict[str, Any]:

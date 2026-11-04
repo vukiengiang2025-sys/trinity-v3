@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.support import PROJECT_ROOT
+from tests.support import PROJECT_ROOT, make_fake_executable
 
 
 def run_cli(args, extra_env=None):
@@ -38,7 +38,7 @@ class CliTests(unittest.TestCase):
     def test_version(self):
         result = run_cli(["version"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Trinity v3.0.0", result.stdout)
+        self.assertIn("Trinity v3.1.0", result.stdout)
         self.assertIn("Python", result.stdout)
 
     def test_help(self):
@@ -147,6 +147,56 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Phê duyệt     : CÓ", result.stdout)
         self.assertFalse(self.db.exists())
+
+    def test_resume_requires_approval_and_dry_run_keeps_waiting(self):
+        first = run_cli(["--db", str(self.db), "run", "xóa dữ liệu production"], self.env)
+        self.assertEqual(first.returncode, 3, first.stderr)
+        match = re.search(r"TRN-\d{8}-\d{6}-[0-9a-f]{6}", first.stdout)
+        self.assertIsNotNone(match)
+        task_id = match.group(0)
+
+        without = run_cli(["--db", str(self.db), "resume", task_id], self.env)
+        self.assertEqual(without.returncode, 3, without.stderr)
+        self.assertIn("Resume cần phê duyệt", without.stdout)
+
+        dry = run_cli(["--db", str(self.db), "resume", task_id, "--dry-run"], self.env)
+        self.assertEqual(dry.returncode, 0, dry.stderr)
+        self.assertIn("DRY-RUN resume", dry.stdout)
+
+        detail = run_cli(["--db", str(self.db), "task", task_id], self.env)
+        self.assertEqual(detail.returncode, 0, detail.stderr)
+        self.assertIn("WAITING_APPROVAL", detail.stdout)
+        self.assertIn("Kế hoạch", detail.stdout)
+        self.assertIn("resume_count: 0", detail.stdout)
+
+    def test_resume_default_opencode_agent_is_fail_closed(self):
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        make_fake_executable(bin_dir, "opencode")
+        env = dict(self.env)
+        env["PATH"] = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+
+        first = run_cli(["--db", str(self.db), "run", "xóa dữ liệu production"], env)
+        self.assertEqual(first.returncode, 3, first.stderr)
+        match = re.search(r"TRN-\d{8}-\d{6}-[0-9a-f]{6}", first.stdout)
+        self.assertIsNotNone(match)
+        task_id = match.group(0)
+
+        resumed = run_cli(["--db", str(self.db), "resume", task_id, "--approve"], env)
+        self.assertEqual(resumed.returncode, 3, resumed.stderr)
+        self.assertIn("WAITING_APPROVAL", resumed.stdout)
+        self.assertIn("chưa cấu hình", resumed.stdout)
+        self.assertIn(task_id, resumed.stdout)
+
+        tasks = run_cli(["--db", str(self.db), "tasks"], env)
+        self.assertEqual(tasks.returncode, 0, tasks.stderr)
+        self.assertEqual(tasks.stdout.count(task_id), 1)
+        self.assertIn("WAITING_APPROVAL", tasks.stdout)
+
+    def test_resume_missing_task(self):
+        result = run_cli(["--db", str(self.db), "resume", "TRN-khong-ton-tai", "--approve"], self.env)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("không tìm thấy task", result.stderr)
 
 
 if __name__ == "__main__":

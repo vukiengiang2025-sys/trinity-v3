@@ -1,4 +1,4 @@
-# AGENTS.md — TRINITY v3.0
+# AGENTS.md — TRINITY v3.1
 
 Hướng dẫn cho agent làm việc trong repo này.
 
@@ -45,6 +45,9 @@ Quy tắc:
 - Không tự tạo memory directory Hermes.
 - Không tự khởi động OpenClaw gateway.
 - Không tự chạy prompt thật qua OpenCode trong test; dùng fake executable.
+- OpenCode phải có `agent` tường minh; không bật lại fallback agent mặc định.
+- Không nới lỏng `fcntl` fail-closed hoặc thêm fallback chạy không khóa.
+- Resume phải giữ Task ID cũ, re-check Guard/Resource/adapter, dùng `claim_for_resume`; không tạo task trùng.
 - Git: không `reset`, `clean`, `push --force`, `branch -D/-d`, `commit --amend`, `filter-repo`, không viết lại lịch sử.
 - Không commit `.env`, `*.key`, credential, DB runtime, log runtime.
 
@@ -56,6 +59,7 @@ python3 -m unittest discover -s tests -t . -v
 python3 trinity.py doctor
 python3 trinity.py status
 python3 trinity.py run --dry-run "sửa lỗi pytest trong module python"
+python3 trinity.py resume <task_id> --dry-run
 ```
 
 Test phải thực sự chạy; không tuyên bố pass nếu chưa chạy. Ghi rõ môi trường nào chưa kiểm chứng (Termux, Hermes, OpenClaw, OpenCode prompt thật).
@@ -64,7 +68,7 @@ Test phải thực sự chạy; không tuyên bố pass nếu chưa chạy. Ghi 
 
 | Adapter | Trạng thái | Ghi chú |
 |---|---|---|
-| OpenCode | AVAILABLE (CLI v2.2.5) | Chưa chạy prompt thật; HTTP execution chưa xác minh |
+| OpenCode | AVAILABLE (CLI v2.2.5) | Execution fail-closed nếu thiếu `agent`; chưa chạy prompt thật; HTTP chưa xác minh |
 | Hermes | UNAVAILABLE | Không có executable; không tạo memory dir |
 | OpenClaw | UNAVAILABLE | Không có executable/gateway; cần `invoke_prefix` đã xác minh |
 

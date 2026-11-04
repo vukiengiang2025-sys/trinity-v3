@@ -71,6 +71,9 @@ if args[:2] == ["memory", "store"]:
 if mode == "timeout":
     time.sleep(5)
     sys.exit(0)
+if mode == "permission":
+    print("permission required: approval needed before tool use", file=sys.stderr)
+    sys.exit(2)
 if mode == "fail":
     print("intentional failure", file=sys.stderr)
     sys.exit(2)
@@ -78,7 +81,10 @@ if args and args[0] == "exec":
     print("executed: " + " ".join(args[1:]))
     sys.exit(0)
 if "run" in args:
-    print("agent output")
+    if mode == "json":
+        print('{{"ok": true, "message": "agent output"}}')
+    else:
+        print("agent output")
     sys.exit(0)
 print("fake-tool " + " ".join(args))
 sys.exit(0)
