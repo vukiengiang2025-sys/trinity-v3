@@ -82,6 +82,18 @@ class ProcessTests(unittest.TestCase):
         self.assertLess(elapsed, 4)
         self.assertIn("thời gian", result.error)
 
+    def test_cwd_and_pwd_are_consistent_in_child(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = run_process(
+                [sys.executable, "-c", "import os; print(os.getcwd()); print(os.environ.get('PWD'))"],
+                timeout=5,
+                cwd=Path(directory),
+            )
+        self.assertTrue(result.ok)
+        lines = result.stdout.strip().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0], lines[1])
+
     def test_missing_executable_is_reported(self):
         result = run_process(["definitely-not-an-executable-trinity"], timeout=2)
         self.assertFalse(result.ok)

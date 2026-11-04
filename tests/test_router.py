@@ -44,6 +44,18 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(len(route.execution_plan), 1)
         self.assertEqual(route.execution_plan[0]["adapter"], "opencode")
 
+    def test_negated_shell_is_not_automation(self):
+        route = self.router.route(
+            "Đọc sample.py và tóm tắt hàm chính. Không sửa file, không chạy shell."
+        )
+        self.assertEqual(route.task_type, "CODING")
+        self.assertEqual([step["adapter"] for step in route.execution_plan], ["opencode"])
+
+    def test_negated_memory_is_not_memory(self):
+        route = self.router.route("Không dùng memory; chỉ giải thích python.")
+        self.assertEqual(route.task_type, "CODING")
+        self.assertEqual([step["adapter"] for step in route.execution_plan], ["opencode"])
+
     def test_mixed_route_is_sequential_and_ordered(self):
         route = self.router.route("đọc memory, refactor code rồi chạy lệnh git status")
         self.assertEqual(route.task_type, "MIXED")

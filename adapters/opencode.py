@@ -199,14 +199,20 @@ class OpenCodeAdapter(BaseAdapter):
         output_format = str(settings.get("format", "json"))
         if output_format not in ("default", "json"):
             output_format = "json"
-        argv = [
-            binary,
-            "run",
-            "--format",
-            output_format,
-            "--title",
-            f"trinity-{request.task_id}",
-        ]
+        standalone = bool(settings.get("standalone", True))
+        argv = [binary, "run"]
+        if standalone:
+            # Avoid the user's long-running OpenCode service and its project
+            # config cache; the private server exits when this run completes.
+            argv.append("--standalone")
+        argv.extend(
+            [
+                "--format",
+                output_format,
+                "--title",
+                f"trinity-{request.task_id}",
+            ]
+        )
         model = settings.get("model")
         if model:
             argv.extend(["--model", str(model)])

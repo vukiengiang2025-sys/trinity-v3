@@ -117,7 +117,10 @@ Chặn vĩnh viễn:
 - Không tự cài/gỡ/nâng cấp công cụ.
 - Không sửa cấu hình OpenCode global.
 - OpenCode **không dùng agent mặc định**: `agent: null` + `require_explicit_agent: true` → `DENIED`. Chỉ bật agent sau khi operator đọc permission bằng `opencode debug agents`.
+- `standalone: true` mặc định: tránh service/cache của OpenCode UI; server riêng kết thúc sau lần chạy.
+- `run_process` đồng bộ `PWD` với `cwd`; nếu không OpenCode có thể đọc nhầm project config.
 - Error permission/approval từ OpenCode được đánh dấu `permission_required`; Trinity không dùng `--auto`.
+- Đã kiểm chứng read-only thật với agent project-local `trinity-readonly`: edit/bash/network/external deny; workspace/Git không đổi. Xem `docs/OPENCODE_SANDBOX.md`.
 
 ## 4. Những gì Guard KHÔNG bảo vệ
 
@@ -133,7 +136,7 @@ Chặn vĩnh viễn:
 8. **Termux shared storage.** Quyền `0600` có thể không được honor trên một số filesystem dùng chung (FAT/exFAT). Ưu tiên bộ nhớ riêng của Termux.
 9. **Full environment inheritance.** Adapter con nhận `os.environ` để hoạt động với cấu hình hiện có; Trinity không log/đọc giá trị, nhưng agent con có thể thấy biến môi trường của tiến trình cha.
 10. **Không chống prompt injection từ nội dung file.** Nếu OpenCode đọc file độc hại, hành vi của nó do OpenCode quyết định.
-11. **Không có built-in OpenCode agent read-only hoàn chỉnh.** `plan` deny edit nhưng wildcard vẫn cho shell; `architect` deny edit nhưng cho read/glob/grep/webfetch và shell Git read-only. Vì vậy không chạy prompt thật khi chưa có permission boundary đã chứng minh.
+11. **Không có built-in OpenCode agent read-only hoàn chỉnh.** `plan` deny edit nhưng wildcard vẫn cho shell; `architect` deny edit nhưng cho read/glob/grep/webfetch và shell Git read-only. Đã tạo agent project-local `trinity-readonly` để kiểm chứng, nhưng agent production (`build`/`general`) vẫn chưa được chứng minh an toàn.
 12. **Prompt resume lấy từ bản đã redact.** Nếu prompt ban đầu chứa secret, task resume sẽ dùng bản đã redact; đây là đánh đổi có chủ đích để không lưu secrets.
 
 ## 4.1 Findings v3.1
@@ -141,7 +144,10 @@ Chặn vĩnh viễn:
 | Mức | Finding | Trạng thái |
 |---|---|---|
 | High | OpenCode có thể chạy shell/edit theo permission nội bộ; Guard không sandbox | **Chấp nhận là giới hạn kiến trúc**; default agent bị chặn |
-| High | Không có OpenCode agent built-in vừa deny edit vừa deny shell | **Chưa chạy prompt thật**; chỉ fake-CLI test |
+| High | Không có OpenCode agent built-in vừa deny edit vừa deny shell | **Đã giảm thiểu**: agent project-local `trinity-readonly` + read-only test thật; agent production chưa xác minh |
+| Medium | `PWD` không đồng bộ `cwd` làm OpenCode đọc nhầm project config | **Đã sửa**: set PWD/OLDPWD + test hồi quy |
+| Medium | Dùng service OpenCode UI gây cache project config | **Đã sửa**: `standalone: true` mặc định |
+| Medium | Router coi “không chạy shell” là AUTOMATION | **Đã sửa**: negation-aware routing + test |
 | Medium | Lock có thể fail-open nếu fcntl/FS không hỗ trợ | **Đã sửa**: fail closed + test |
 | Medium | Resume tạo task mới, mất plan/approval history | **Đã sửa**: resume cùng Task ID, plan, scope |
 | Medium | Hai tiến trình có thể resume cùng task | **Đã sửa**: conditional claim + lock + test |
@@ -177,6 +183,8 @@ Xem `docs/TEST_REPORT.md`. Các test bao gồm:
 - DB/audit permission `0600`.
 - Adapter thiếu tool → UNAVAILABLE; OpenClaw thiếu guard/approval → DENIED.
 - OpenCode thiếu agent tường minh → DENIED; permission error được đánh dấu.
+- OpenCode read-only thật: read trong workspace được phép; edit/bash bị ẩn; `/etc/passwd` bị `external_directory` deny; workspace/Git không đổi.
+- `PWD` đồng bộ `cwd`; `--standalone`; router negation.
 - Resume cùng Task ID, lưu approval scope, atomic claim, chống chạy trùng.
 - Resume sai profile/workspace/plan bị từ chối.
 - `fcntl` không hỗ trợ/non-POSIX → fail closed.

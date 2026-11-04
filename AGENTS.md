@@ -44,8 +44,9 @@ Quy tắc:
 - Không lưu prompt/result/error/audit mà chưa qua `redact()`/`truncate()`.
 - Không tự tạo memory directory Hermes.
 - Không tự khởi động OpenClaw gateway.
-- Không tự chạy prompt thật qua OpenCode trong test; dùng fake executable.
+- Không chạy prompt thật qua OpenCode ngoài sandbox permission đã chứng minh; test thường dùng fake executable. Quy trình sandbox: `docs/OPENCODE_SANDBOX.md`.
 - OpenCode phải có `agent` tường minh; không bật lại fallback agent mặc định.
+- Giữ `standalone: true` và `PWD` đồng bộ `cwd` cho adapter OpenCode.
 - Không nới lỏng `fcntl` fail-closed hoặc thêm fallback chạy không khóa.
 - Resume phải giữ Task ID cũ, re-check Guard/Resource/adapter, dùng `claim_for_resume`; không tạo task trùng.
 - Git: không `reset`, `clean`, `push --force`, `branch -D/-d`, `commit --amend`, `filter-repo`, không viết lại lịch sử.
@@ -62,13 +63,13 @@ python3 trinity.py run --dry-run "sửa lỗi pytest trong module python"
 python3 trinity.py resume <task_id> --dry-run
 ```
 
-Test phải thực sự chạy; không tuyên bố pass nếu chưa chạy. Ghi rõ môi trường nào chưa kiểm chứng (Termux, Hermes, OpenClaw, OpenCode prompt thật).
+Test phải thực sự chạy; không tuyên bố pass nếu chưa chạy. Ghi rõ môi trường nào chưa kiểm chứng (Termux, Hermes, OpenClaw, agent production của OpenCode).
 
 ## 5. Adapter status hiện tại
 
 | Adapter | Trạng thái | Ghi chú |
 |---|---|---|
-| OpenCode | AVAILABLE (CLI v2.2.5) | Execution fail-closed nếu thiếu `agent`; chưa chạy prompt thật; HTTP chưa xác minh |
+| OpenCode | AVAILABLE (CLI v2.2.5) | Đã test read-only thật với agent tạm `trinity-readonly`; execution fail-closed nếu thiếu `agent`; agent production/HTTP chưa xác minh |
 | Hermes | UNAVAILABLE | Không có executable; không tạo memory dir |
 | OpenClaw | UNAVAILABLE | Không có executable/gateway; cần `invoke_prefix` đã xác minh |
 
@@ -91,3 +92,4 @@ Cập nhật khi thay đổi hành vi:
 - `docs/SECURITY.md` — kiểm soát và giới hạn.
 - `docs/ENVIRONMENT_REPORT.md` — môi trường thực tế.
 - `docs/TEST_REPORT.md` — kết quả test thực tế.
+- `docs/OPENCODE_SANDBOX.md` — quy trình kiểm chứng OpenCode read-only.

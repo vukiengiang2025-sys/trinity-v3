@@ -199,6 +199,7 @@ MEDIUM_RISK_KEYWORDS = (
     "test",
 )
 STORE_KEYWORDS = ("luu", "ghi nho", "store", "save", "them vao memory")
+NEGATION_RE = re.compile(r"\b(?:khong(?:\s+(?:duoc|cho\s+phep))?|no|not|do\s+not|don't|without)\b")
 
 
 def normalize(text: str) -> str:
@@ -211,9 +212,24 @@ def _hits(text: str, keywords: Iterable[str]) -> List[str]:
     found: List[str] = []
     for keyword in keywords:
         pattern = re.escape(keyword)
-        if re.search(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", text):
-            found.append(keyword)
+        regex = re.compile(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])")
+        for match in regex.finditer(text):
+            if not _is_negated(text, match.start()):
+                found.append(keyword)
+                break
     return found
+
+
+def _is_negated(text: str, start: int) -> bool:
+    """Skip a keyword when the same clause explicitly negates it.
+
+    This prevents "không chạy shell" from adding an AUTOMATION step while
+    keeping a positive mention elsewhere in the prompt effective.
+    """
+
+    prefix = text[max(0, start - 60) : start]
+    clause = re.split(r"[,.;!?]", prefix)[-1]
+    return bool(NEGATION_RE.search(clause))
 
 
 class Router:

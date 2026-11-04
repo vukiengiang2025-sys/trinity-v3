@@ -12,6 +12,7 @@ from adapters.base import AdapterRequest, AdapterStatus, ResultStatus
 from adapters.hermes import HermesAdapter
 from adapters.openclaw import OpenClawAdapter
 from adapters.opencode import OpenCodeAdapter
+from core.utils import ProcessResult
 
 
 class AdapterTestBase(unittest.TestCase):
@@ -144,6 +145,21 @@ class OpenCodeAdapterTests(AdapterTestBase):
         adapter.discover(force=True)
         ready, reason = adapter.execution_ready()
         self.assertTrue(ready, reason)
+
+    def test_standalone_is_used_and_auto_is_never_passed(self):
+        fake = make_fake_executable(self.root, "opencode-fake")
+        self.config.data["adapters"]["opencode"]["binary"] = str(fake)
+        self.config.data["adapters"]["opencode"]["agent"] = "reviewed-agent"
+        adapter = OpenCodeAdapter(self.config)
+        adapter.discover(force=True)
+        process = ProcessResult([], 0, "{}", "", False, 0.1)
+        with mock.patch("adapters.opencode.run_process", return_value=process) as runner:
+            result = adapter.execute(self.request())
+        self.assertEqual(result.status, ResultStatus.SUCCESS)
+        argv = runner.call_args.args[0]
+        self.assertIn("--standalone", argv)
+        self.assertIn("--agent", argv)
+        self.assertNotIn("--auto", argv)
 
 
 class HermesAdapterTests(AdapterTestBase):

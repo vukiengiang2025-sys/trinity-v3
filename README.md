@@ -17,10 +17,11 @@ Repository: <https://github.com/vukiengiang2025-sys/trinity-v3>
 > - Hermes: **UNAVAILABLE** (không có executable).
 > - OpenClaw: **UNAVAILABLE** (không có executable/gateway).
 > - OpenCode execution **fail closed**: phải cấu hình `adapters.opencode.agent` đã kiểm tra permission; không tự dùng agent mặc định.
-> - Chưa chạy prompt thật qua OpenCode vì chưa có agent vừa deny edit vừa deny shell; đường thực thi đã được kiểm thử bằng fake CLI (argv, timeout, lỗi, permission, JSON).
+> - **Đã chạy read-only prompt thật** qua OpenCode với agent tạm `trinity-readonly` trong workspace giả: task `TRN-20261104-152925-1c79c9` COMPLETED, workspace/Git không đổi, `/etc/passwd` bị `external_directory` deny.
+> - Chưa xác minh agent production (`build`/`general`); mặc định vẫn fail closed nếu chưa cấu hình `agent`.
 > - HTTP API của OpenCode chỉ được health-check; endpoint thực thi có auth **chưa xác minh**, nên mặc định tắt.
-> - CI GitHub Actions: **v3.1 PASS** trên Python 3.9 và 3.12.
-> - **139 unittest — 0 failure**.
+> - CI GitHub Actions: **v3.1 (139 test) PASS**; bộ 143 test sẽ chạy sau push.
+> - **143 unittest — 0 failure**.
 >
 > Trinity không tuyên bố tích hợp đầy đủ ba agent khi adapter tương ứng chưa được xác minh.
 
@@ -293,9 +294,11 @@ python3 trinity.py version
 ### 7.1 OpenCode — LOGIC (đã xác minh CLI)
 
 - Phát hiện: `which opencode`, `opencode --version`, `opencode run --help`.
-- Thực thi: `opencode run --format json --title trinity-<task_id> --agent <agent> <prompt>`.
+- Thực thi: `opencode run --standalone --format json --title trinity-<task_id> --agent <agent> <prompt>`.
 - **Fail closed**: `agent: null` + `require_explicit_agent: true` → adapter trả `DENIED`, không dùng agent mặc định của OpenCode. Chỉ đặt `agent` sau khi kiểm tra permission bằng `opencode debug agents`.
-- Không tìm thấy agent hiện có nào vừa `edit: deny` vừa `shell: deny`; vì vậy không chạy prompt thật trong môi trường build.
+- Không có agent built-in nào vừa `edit: deny` vừa `shell: deny`; vì vậy chỉ chạy prompt thật với **agent kiểm thử project-local** `trinity-readonly` trong workspace giả. Xem `docs/OPENCODE_SANDBOX.md`.
+- `standalone: true` mặc định: mỗi lần chạy dùng server riêng, tránh cache/session của OpenCode UI.
+- `run_process` đồng bộ `PWD` với `cwd`; nếu không OpenCode có thể đọc nhầm project config (lỗi `Agent not found` đã được sửa).
 - Không truyền `--auto`; không sửa `opencode.json/jsonc`, provider, model, MCP, plugin hoặc skills.
 - Prompt bắt đầu bằng `-`, chứa NUL hoặc quá 100.000 ký tự bị từ chối để tránh argument injection.
 - Timeout mặc định 900s (Linux) / 600s (Termux); quá hạn sẽ kill process group.
@@ -309,11 +312,12 @@ Ví dụ bật có kiểm soát (chỉ sau khi đọc permission của agent):
 ```yaml
 adapters:
   opencode:
-    agent: architect          # hoặc agent khác đã kiểm tra
+    agent: trinity-readonly   # agent project-local đã kiểm tra permission
     require_explicit_agent: true
+    standalone: true
 ```
 
-Ngay cả khi đặt agent, Guard của Trinity **không sandbox** công cụ nội bộ của OpenCode. Agent có `shell: allow` hoặc `edit: allow` có thể vượt phạm vi kiểm soát của Trinity.
+Không dùng `agent: architect`/`build`/`general` như một "read-only agent" nếu chưa kiểm tra permission. Ngay cả khi đặt agent, Guard của Trinity **không sandbox** công cụ nội bộ của OpenCode. Agent có `shell: allow` hoặc `edit: allow` có thể vượt phạm vi kiểm soát của Trinity.
 
 Kiểm tra:
 
@@ -363,7 +367,7 @@ Vì chưa xác minh OpenClaw, `run "chạy lệnh ..."` sẽ dừng ở `FAILED`
 
 | Adapter | Build host | Điều kiện AVAILABLE | Thực thi thật đã test |
 |---|---|---|---|
-| OpenCode | AVAILABLE v2.2.5 | CLI `--version` + `run --help`; execution cần `agent` cấu hình rõ | Chưa (fake CLI cho argv/timeout/error/permission; prompt thật bị chặn bởi permission) |
+| OpenCode | AVAILABLE v2.2.5 | CLI `--version` + `run --help`; execution cần `agent` cấu hình rõ | **Đã test read-only thật** với `trinity-readonly`; agent production chưa xác minh |
 | Hermes | UNAVAILABLE | CLI + command template memory đã cấu hình | Không |
 | OpenClaw | UNAVAILABLE | CLI + `invoke_prefix` + allowlist | Không |
 
@@ -393,7 +397,7 @@ Giới hạn quan trọng: **Guard không phải sandbox**. OpenCode/CLI bên tr
 python3 -m unittest discover -s tests -t . -v
 ```
 
-Kết quả lần chạy gần nhất: **139 test, 0 failure, 0 error**. CI v3.1 pass trên Python 3.9 và 3.12. Xem `docs/TEST_REPORT.md`.
+Kết quả lần chạy gần nhất: **143 test, 0 failure, 0 error**. CI v3.1 (139 test) đã pass; bộ 143 test sẽ chạy sau push. Xem `docs/TEST_REPORT.md`.
 
 Các nhóm đã kiểm tra:
 
@@ -402,9 +406,12 @@ Các nhóm đã kiểm tra:
 - Resource: RAM không đọc được (unknown ≠ 0), fallback sysconf, RAM thấp, disk thấp, lock, timeout.
 - Task Manager: Task ID, trạng thái, event, transition, DB permission, redaction, migration v3.0 → v3.1.
 - **Task Resume**: giữ Task ID, plan, approval scope, atomic claim, chống chạy trùng, profile/workspace mismatch, adapter/resource/lock blocked.
-- Adapter: thiếu executable, timeout, fake CLI, JSON output, permission error, OpenClaw allowlist/approval, Hermes không tạo memory dir, OpenCode default-agent fail closed.
+- Adapter: thiếu executable, timeout, fake CLI, JSON output, permission error, OpenClaw allowlist/approval, Hermes không tạo memory dir, OpenCode default-agent fail closed, `--standalone` và chặn `--auto`.
+- **OpenCode real read-only**: agent `trinity-readonly`, edit/bash/network/external deny, task completed, workspace/Git unchanged.
 - CLI: version/status/config/tasks/task/run/resume dry-run, profile, không ghi DB/audit khi dry-run.
 - Executor: tuần tự, dừng khi lỗi, approval, resource/lock failure, redaction.
+- Process: `PWD` đồng bộ `cwd`, timeout kill process group, output redaction.
+- Router negation: “không chạy shell” không tạo bước AUTOMATION.
 - Termux simulation: PREFIX detection, profile thresholds, sysconf fallback, fcntl unsupported → fail closed, non-POSIX fail closed.
 
 ---
@@ -475,3 +482,4 @@ Tài liệu chi tiết:
 - [`docs/SECURITY.md`](docs/SECURITY.md)
 - [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)
 - [`docs/TERMUX_COMPATIBILITY.md`](docs/TERMUX_COMPATIBILITY.md)
+- [`docs/OPENCODE_SANDBOX.md`](docs/OPENCODE_SANDBOX.md)

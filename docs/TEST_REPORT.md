@@ -3,10 +3,10 @@
 - **Ngày:** 2026-11-04
 - **Môi trường:** Linux Mint 22.3, Python 3.12.3, OpenCode v2.2.5
 - **Lệnh:** `python3 -m unittest discover -s tests -t . -v`
-- **Kết quả:** **139 test — 0 failure — 0 error — OK**
+- **Kết quả:** **143 test — 0 failure — 0 error — OK**
 - **Trước v3.1:** 115 test
-- **Sau v3.1:** 139 test (+24)
-- **CI GitHub Actions:** PASS — Python 3.9 và Python 3.12 (run 41853332251)
+- **Sau v3.1:** 143 test (+28)
+- **CI:** v3.1 (139 test) PASS trên Python 3.9/3.12; bộ 143 test chạy sau push
 - **Không dùng pytest**: test chạy bằng Standard Library `unittest`.
 
 ## 1. Tổng hợp theo module
@@ -14,139 +14,144 @@
 | File | Số test | Nội dung |
 |---|---:|---|
 | `test_config.py` | 9 | Profile Linux/Termux, auto-detect, profile sai, allowed roots, mask secrets |
-| `test_router.py` | 11 | MEMORY/CODING/AUTOMATION/MIXED/GENERAL, risk, plan, Task ID, normalize |
-| `test_guard.py` | 20 | Path, symlink, file nhạy cảm, command allowlist, git safety, injection, interpreter |
+| `test_router.py` | 13 | Phân loại, risk, plan, Task ID, negation-aware routing |
+| `test_guard.py` | 20 | Path, symlink, file nhạy cảm, command allowlist, Git safety, injection |
 | `test_resource.py` | 11 | RAM đọc được/không đọc được, sysconf fallback, RAM/disk thấp, lock, timeout |
 | `test_task.py` | 12 | Task lifecycle, transition, event, permission, missing DB, redaction, audit |
-| `test_adapters.py` | 22 | Missing tool, discovery, fake CLI, timeout, injection, JSON, permission, OpenClaw/Hermes, default-agent deny |
+| `test_adapters.py` | 23 | Missing tool, fake CLI, timeout, JSON, permission, OpenClaw/Hermes, default-agent deny, standalone |
 | `test_executor.py` | 12 | Tuần tự, approval, fail-stop, resource/lock failure, redaction |
 | `test_resume.py` | 16 | Resume cùng Task ID, approval record, atomic claim, mismatch, migration, lock fail-closed |
-| `test_cli.py` | 17 | version/status/config/tasks/task/run/resume, dry-run, profile, exit code, default-agent deny |
-| `test_utils.py` | 9 | Redaction, truncate, mask mapping, subprocess timeout/output |
-| **Tổng** | **139** | |
+| `test_cli.py` | 17 | version/status/config/tasks/task/run/resume, dry-run, exit code |
+| `test_utils.py` | 10 | Redaction, truncate, mask mapping, subprocess timeout, PWD/cwd consistency |
+| **Tổng** | **143** | |
 
-## 2. Kết quả CI
-
-Workflow: `.github/workflows/tests.yml`
+## 2. CI
 
 | Job | Kết quả |
 |---|---|
-| `unittest (3.9)` | **success** |
-| `unittest (3.12)` | **success** |
+| `unittest (3.9)` | **success** (v3.1, 139 test) |
+| `unittest (3.12)` | **success** (v3.1, 139 test) |
 
-v3.1 code commit `2298aba`; run: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41853332251>.
+Run 139 test: <https://github.com/vukiengiang2025-sys/trinity-v3/actions/runs/41853332251>
 
-## 3. Đối chiếu yêu cầu kiểm thử
+Bộ 143 test sẽ chạy lại sau commit/push; báo cáo cuối cùng ghi kết quả thực tế.
 
-| # | Yêu cầu | Test tương ứng | Kết quả |
-|---|---|---|---|
-| 1 | Router phân loại đúng nhóm | `test_router.py` | PASS |
-| 2 | Guard từ chối lệnh nguy hiểm | `test_guard.py::test_dangerous_commands_denied`, `test_git_force...` | PASS |
-| 3 | Guard chặn ngoài workspace | `test_guard.py` path/symlink/traversal | PASS |
-| 4 | Resource xử lý RAM không đọc được | `test_resource.py` unknown/fallback | PASS |
-| 5 | Task Manager tạo/cập nhật Task ID | `test_task.py` | PASS |
-| 6 | SQLite không lưu credentials | `test_task.py`, `AuditLogTests` | PASS |
-| 7 | Adapter xử lý tool không tồn tại | `test_adapters.py` missing binaries | PASS |
-| 8 | Adapter có timeout | `test_adapters.py::test_timeout_is_enforced`, `test_utils.py` | PASS |
-| 9 | CLI lệnh cơ bản | `test_cli.py` | PASS |
-| 10 | Dry-run không thay đổi dữ liệu | `test_cli.py`, `test_executor.py`, `test_resume.py` | PASS |
-| 11 | Git safety không force/reset | `test_guard.py::test_git_force_and_history_rewrite_denied` | PASS |
-| 12 | Profile Linux/Termux | `test_config.py`, `test_cli.py` | PASS |
+## 3. OpenCode Adapter — kiểm chứng end-to-end
 
-## 4. Kiểm định OpenCode Adapter
+### 3.1 Read-only sandbox
 
-Đã kiểm tra bằng code + fake CLI:
+Đã tạo **project-local** agent `trinity-readonly` trong `/tmp/trinity-opencode-sandbox` (không sửa global config):
 
-- Tạo subprocess bằng argv list, không `shell=True`.
-- Prompt được truyền thành một argument; prompt bắt đầu `-`/chứa NUL bị từ chối.
-- Timeout và kill process group được test.
-- Exit code khác 0 → `FAILED`; output được redact.
-- JSON output được kiểm tra `json_valid`.
-- Lỗi permission/approval được đánh dấu `permission_required`; không dùng `--auto`.
-- **Default agent fail closed**: thiếu `adapters.opencode.agent` → `DENIED`.
-- ACL: `opencode debug agents` cho thấy:
-  - `build`/`general`: wildcard allow (edit + shell).
-  - `plan`: edit deny, nhưng wildcard vẫn cho shell.
-  - `architect`: edit deny, shell chỉ Git read-only, nhưng vẫn có read/glob/grep/webfetch.
-  - Không có agent built-in vừa deny edit vừa deny shell.
-- Vì vậy **không chạy prompt thật** qua OpenCode; chỉ kiểm thử bằng fake CLI. Đây là giới hạn có chủ đích, không phải test pass giả.
+- deny: `edit`, `bash`, `webfetch`, `websearch`, `external_directory`, `task`, `skill`, `todowrite`, `question`.
+- allow: `read`, `glob`, `grep`, `list` trong workspace.
+- deny đọc trực tiếp `/etc`, `/home`, `/root`, `/proc`, `/sys`, `*.env`.
 
-## 5. Task Resume
+Kết quả test permission trực tiếp:
 
-Đã triển khai và kiểm thử:
+| Hành động | Kết quả |
+|---|---|
+| Đọc `sample.py` | **THÀNH CÔNG** |
+| Edit/tạo file | **KHÔNG CÓ TOOL** (bị permission ẩn) |
+| Bash `touch` | **KHÔNG CÓ TOOL** |
+| Git commit | **KHÔNG CÓ SHELL** |
+| Đọc `/etc/passwd` | **DENIED** — `permission.rejected / external_directory` |
+| Workspace/Git sau test | Không đổi |
 
-- Giữ nguyên Task ID, plan JSON, prompt đã redact, risk, profile.
-- `resume <id>` không có `--approve` → vẫn `WAITING_APPROVAL`, không chạy adapter.
-- `resume <id> --dry-run` → không ghi dữ liệu, không đổi trạng thái.
-- `resume <id> --approve` → claim atomic, chạy plan, lưu `approved_by`, `approved_at`, `approval_scope`, `resume_count`.
-- Hai lần claim cùng task: lần hai bị `StorageError`.
+### 3.2 Trinity Adapter thật
+
+Cấu hình Executor tạm trỏ workspace sandbox, `agent=trinity-readonly`, `standalone=true`.
+
+| Mục | Kết quả |
+|---|---|
+| Task ID | `TRN-20261104-152925-1c79c9` |
+| Status | **COMPLETED** |
+| Adapter | `opencode` |
+| Result | 4.644 ký tự JSON output |
+| Nội dung | Tóm tắt đúng `add(a, b)` |
+| Workspace/Git | Không đổi |
+| Audit | `task_started` → `adapter_finished SUCCESS` → `task_completed` |
+
+Đã phát hiện và sửa lỗi thực tế:
+
+- **`PWD` không đồng bộ `cwd`** → OpenCode đọc nhầm project config, báo `Agent not found`. Sửa trong `run_process` + test.
+- **Service OpenCode UI dùng chung** → thêm `standalone: true` mặc định để mỗi run dùng server riêng.
+- **Router coi “không chạy shell” là AUTOMATION** → thêm negation-aware routing + test.
+
+## 4. Task Resume
+
+Đã kiểm thử:
+
+- Giữ Task ID, plan JSON, prompt redact, risk, profile, workspace.
+- Không approve → vẫn `WAITING_APPROVAL`.
+- Dry-run → không ghi dữ liệu.
+- Approve → atomic claim, lưu `approved_by`, `approved_at`, `approval_scope`, `resume_count`.
+- Hai claim cùng task: lần hai bị `StorageError`.
 - Sai profile/workspace/plan thiếu → từ chối.
-- Adapter unavailable / resource denied / lock busy → task vẫn `WAITING_APPROVAL`, có event `resume_blocked`.
-- Task v3.0 thiếu `plan_json`/`workspace` bị từ chối resume.
-- Migration tự động thêm cột v3.1 vào DB v3.0.
-- Ghi nhận `approved_by` từ user hệ thống, thời điểm, scope hash plan.
+- Adapter/resource/lock chưa sẵn sàng → task vẫn `WAITING_APPROVAL`.
+- Migration DB v3.0 → v3.1.
+- Task v3.0 thiếu plan/workspace bị từ chối resume.
 
-Trạng thái: **IMPLEMENTED & TESTED** ở mức executor + CLI dry-run; chưa chạy resume thật qua OpenCode vì default-agent/permission chưa được chứng minh.
+## 5. Termux compatibility
 
-## 6. Termux Compatibility
-
-Đã kiểm tra mô phỏng trên Linux:
+Đã mô phỏng trên Linux:
 
 - `PREFIX` detection → Termux profile.
 - Ngưỡng RAM 192 MB / disk 150 MB.
 - `/proc/meminfo` fallback `os.sysconf`.
 - SQLite tạo/đọc/ghi, migration.
-- `fcntl` lock; filesystem không hỗ trợ → **fail closed**.
-- Non-POSIX → **fail closed**.
+- `fcntl` lock; filesystem không hỗ trợ → fail closed.
+- Non-POSIX → fail closed.
 - Subprocess timeout + kill process group.
 
-**Chưa chạy trên Redmi 15 5G / Termux thật.** Checklist và tiêu chí PASS: `docs/TERMUX_COMPATIBILITY.md`.
+**Chưa chạy trên Redmi 15 5G / Termux thật.** Checklist: `docs/TERMUX_COMPATIBILITY.md`.
 
-## 7. Smoke test thủ công
+## 6. Smoke test thủ công
 
 | Lệnh | Kết quả |
 |---|---|
 | `python3 -m compileall -q ...` | PASS |
-| `python3 trinity.py version` | PASS |
-| `python3 trinity.py config` | PASS — profile linux |
+| `python3 trinity.py version` | PASS — `Trinity v3.1.0` |
 | `python3 trinity.py config --profile termux` | PASS — RAM 192 MB |
 | `python3 trinity.py status` | PASS — OpenCode AVAILABLE; execution cần agent |
-| `python3 trinity.py doctor` | PASS — 0 FAIL, 3 WARN (Hermes, OpenClaw, OpenCode agent chưa cấu hình) |
-| `python3 trinity.py run --dry-run "sửa lỗi pytest"` | PASS — không tạo DB |
+| `python3 trinity.py doctor` | PASS — 0 FAIL, 3 WARN |
+| `python3 trinity.py run --dry-run ...` | PASS — không tạo DB |
 | `python3 trinity.py run "xóa dữ liệu production"` | PASS — WAITING_APPROVAL, exit 3 |
-| `python3 trinity.py resume <id> --dry-run` | PASS — không đổi task |
-| `python3 trinity.py resume <id>` (không approve) | PASS — vẫn WAITING_APPROVAL |
-| `python3 trinity.py resume <hermes-task> --approve` | PASS — adapter UNAVAILABLE, task vẫn WAITING_APPROVAL |
+| `resume <id> --dry-run` | PASS — không đổi task |
+| `resume <id>` (không approve) | PASS — vẫn WAITING_APPROVAL |
+| OpenCode read-only thật | PASS — task `TRN-20261104-152925-1c79c9` |
 
-## 8. Lỗi đã phát hiện và sửa trong v3.1
+## 7. Lỗi phát hiện và sửa trong v3.1
 
 | Mức | Lỗi | Sửa |
 |---|---|---|
-| High | OpenCode dùng agent mặc định có thể edit/shell tự động | `require_explicit_agent: true`, thiếu agent → DENIED |
-| Medium | Lock fail-open khi fcntl/FS không hỗ trợ | Fail closed + test |
-| Medium | Resume tạo task mới, mất plan | Resume cùng Task ID, lưu plan/workspace |
+| High | OpenCode dùng agent mặc định có thể edit/shell | `require_explicit_agent: true`, thiếu agent → DENIED |
+| Medium | `PWD` không đồng bộ `cwd` → sai project config | Set `PWD`/`OLDPWD` + test |
+| Medium | Shared OpenCode service/cache config | `standalone: true` + test |
+| Medium | Router coi phủ định là hành động | Negation-aware `_hits` + test |
+| Medium | Lock fail-open | Fail closed + test |
+| Medium | Resume tạo task mới, mất plan | Resume cùng Task ID, plan/workspace |
 | Medium | Hai tiến trình resume cùng task | Conditional SQLite claim + lock |
 | Medium | Không lưu approval actor/time/scope | Thêm cột + event |
-| Low | JSON output chưa kiểm tra | `json_valid` metadata |
-| Low | Permission error không phân loại | `permission_required` metadata |
-| Low | DB v3.0 không có cột resume | Migration ALTER TABLE + test |
+| Low | JSON output chưa kiểm tra | `json_valid` |
+| Low | Permission error không phân loại | `permission_required` |
 
-## 9. Những gì CHƯA kiểm chứng
+## 8. Những gì CHƯA kiểm chứng
 
-1. **OpenCode prompt thật**: chưa có agent built-in đáp ứng edit-deny + shell-deny; không chạy để tránh hành vi ngoài kiểm soát.
+1. **Agent production OpenCode (`build`/`general`)**: chưa chạy; quyền rộng hơn agent test.
 2. **Hermes**: UNAVAILABLE; chưa kiểm chứng memory thật.
 3. **OpenClaw**: UNAVAILABLE; chưa kiểm chứng exec/gateway thật.
 4. **OpenCode HTTP execution**: health 200 nhưng auth/endpoint thực thi chưa xác minh; mặc định tắt.
-5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G trong môi trường build.
-6. **Resume chạy thật qua OpenCode**: chỉ test executor/CLI với fake adapter; default-agent fail-closed đã test.
-7. **CI v3.1**: PASS trên Python 3.9 và 3.12 (run 41853332251).
+5. **Termux trên thiết bị thật**: chưa có Redmi 15 5G.
+6. **Resume chạy thật qua OpenCode**: đã test executor/CLI; chưa chạy resume thật với agent production.
+7. **CI 143 test**: chờ chạy sau push.
 
-## 10. Cách tái lập
+## 9. Cách tái lập
 
 ```bash
 cd trinity-v3
 python3 -m pip install -r requirements.txt
 python3 -m unittest discover -s tests -t . -v
 python3 trinity.py doctor
-python3 trinity.py run --dry-run "sửa lỗi pytest trong module python"
 ```
+
+Sandbox OpenCode chi tiết: `docs/OPENCODE_SANDBOX.md`.

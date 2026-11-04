@@ -96,6 +96,8 @@ Phân loại:
 
 Thứ tự plan cố định: **BRAIN → LOGIC → MUSCLE**. Router chỉ trả risk/plan; **không cấp quyền thực thi**. Executor kiểm tra lại approval.
 
+Router bỏ qua keyword bị phủ định trong cùng mệnh đề (ví dụ “không chạy shell”, “không dùng memory”), tránh thêm bước AUTOMATION/MEMORY sai. Test hồi quy nằm trong `tests/test_router.py`.
+
 ### 3.3 Safety Guard — `core/guard.py`
 
 Kiểm tra thuần túy, không thực thi:
@@ -210,14 +212,16 @@ class BaseAdapter:
 - `SUCCESS`, `FAILED`, `TIMEOUT`, `UNAVAILABLE`, `DENIED`, `UNVERIFIED`, `DRY_RUN`.
 - Timeout bắt buộc, output redacted, duration.
 
-Mọi subprocess dùng `run_process(argv, timeout, ...)`: `shell=False`, `start_new_session=True`, kill process group khi timeout, giới hạn output.
+Mọi subprocess dùng `run_process(argv, timeout, ...)`: `shell=False`, `start_new_session=True`, kill process group khi timeout, giới hạn output. Khi có `cwd`, `PWD`/`OLDPWD` được đồng bộ để công cụ như OpenCode không đọc nhầm project config.
 
 OpenCode adapter có thêm policy riêng (v3.1):
 
 - `require_explicit_agent: true` + `agent: null` → `DENIED`, không dùng agent mặc định.
 - Chỉ operator đặt `agent` sau khi kiểm tra `opencode debug agents`.
+- `standalone: true` mặc định: server riêng cho lần chạy, tránh service/cache của OpenCode UI.
 - Output JSON được kiểm tra hợp lệ (`json_valid`); lỗi permission được đánh dấu `permission_required`.
 - Không truyền `--auto`.
+- Đã kiểm chứng read-only thật với agent project-local `trinity-readonly`: xem `docs/OPENCODE_SANDBOX.md`.
 
 ## 4. Luồng dữ liệu
 
@@ -273,4 +277,5 @@ Không sửa executor để biết chi tiết CLI của agent mới; toàn bộ 
 - Không có retry/queue dài hạn; mỗi `run` là một task tuần tự.
 - Task `WAITING_APPROVAL` chỉ resume được nếu còn `plan_json`/`workspace`; task v3.0 cũ bị từ chối.
 - OpenCode execution mặc định fail closed nếu chưa cấu hình `agent`; không có agent built-in nào vừa deny edit vừa deny shell.
-- Guard không kiểm soát công cụ nội bộ của OpenCode sau khi tiến trình được khởi chạy.
+- OpenCode read-only đã được kiểm chứng với agent tạm `trinity-readonly`; agent production (`build`/`general`) và HTTP execution vẫn chưa.
+- Guard không kiểm soát công cụ nội bộ của OpenCode sau khi tiến trình được khởi chạy; permission của agent là lớp kiểm soát chính.

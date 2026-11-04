@@ -52,6 +52,8 @@ adapters:
     binary: opencode
     # mode: cli (đã xác minh) hoặc http (chưa xác minh endpoint thực thi).
     mode: cli
+    # Server riêng cho từng lần chạy, tránh cache/session của OpenCode UI.
+    standalone: true
     http_enabled: false
     http_url: "http://127.0.0.1:4096"
     http_health_path: "/global/health"

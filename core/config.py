@@ -71,6 +71,7 @@ DEFAULTS: Dict[str, Any] = {
             "enabled": True,
             "binary": "opencode",
             "mode": "cli",
+            "standalone": True,
             "http_enabled": False,
             "http_url": "http://127.0.0.1:4096",
             "http_health_path": "/global/health",

@@ -190,6 +190,11 @@ def run_process(
         raise ValueError("argv rỗng")
     started = time.monotonic()
     child_env = dict(os.environ if env is None else env)
+    if cwd is not None:
+        # subprocess changes cwd but not PWD.  Tools such as OpenCode resolve
+        # project configuration from PWD, so keep both values consistent.
+        child_env["PWD"] = str(Path(cwd).resolve())
+        child_env["OLDPWD"] = str(Path.cwd())
     try:
         proc = subprocess.Popen(
             args,
